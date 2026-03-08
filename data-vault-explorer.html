@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Vault Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,700;0,900;1,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0a0e1a; --surface:#111827; --surface2:#0d1220; --border:#1e2d40;
+  --hub:#f0a500; --hub-dim:#f0a50044;
+  --sat:#00c9a7; --sat-dim:#00c9a730;
+  --link:#e05c97; --link-dim:#e05c9730;
+  --pit:#7c6af7; --pit-dim:#7c6af730;
+  --biz:#f97316; --biz-dim:#f9731630;
+  --sal:#e879f9; --sal-dim:#e879f930;
+  --ref:#4fc3f7; --ref-dim:#4fc3f730;
+  --cross:#facc15; --cross-dim:#facc1530;
+  --text:#e8eaf0; --muted:#6b7a99; --ok:#34d399;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;opacity:0.25;pointer-events:none;z-index:0;}
+
+.container{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:40px 24px 100px;}
+
+/* HEADER */
+header{text-align:center;margin-bottom:44px;animation:fadeDown 0.6s ease both;}
+.eyebrow{font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+h1{font-family:'Fraunces',serif;font-size:clamp(2rem,5vw,3.2rem);font-weight:900;line-height:1;margin-bottom:12px;}
+h1 em{font-style:italic;color:var(--hub);}
+.subtitle{font-size:12.5px;color:var(--muted);max-width:500px;margin:0 auto;line-height:1.85;}
+
+/* NAV */
+.nav-tabs{display:flex;gap:3px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:28px;animation:fadeUp 0.6s 0.1s ease both;overflow-x:auto;}
+.nav-tab{flex:1;min-width:100px;padding:9px 12px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:10.5px;letter-spacing:0.05em;cursor:pointer;transition:all 0.2s;white-space:nowrap;text-align:center;}
+.nav-tab:hover{color:var(--text);background:#ffffff06;}
+.nav-tab.active{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.tab-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+.tab-section{display:none;animation:fadeUp 0.3s ease both;}
+.tab-section.active{display:block;}
+
+/* SECTION LABEL */
+.slabel{font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:var(--muted);margin:0 0 14px;display:flex;align-items:center;gap:12px;}
+.slabel::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ══════════════════════════════════════════
+   ER DIAGRAM
+══════════════════════════════════════════ */
+.er-container{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px;}
+.er-toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;gap:8px;}
+.er-label{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-right:auto;}
+.toggle-btn{padding:5px 12px;border-radius:5px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.18s;display:flex;align-items:center;gap:5px;}
+.toggle-btn:hover{color:var(--text);border-color:#3a4a60;}
+.toggle-btn.on{background:var(--cross-dim);color:var(--cross);border-color:var(--cross);}
+.er-hint{font-size:10px;color:var(--muted);opacity:0.6;font-style:italic;}
+.er-svg-scroll{width:100%;overflow:auto;position:relative;}
+svg.er-svg{display:block;font-family:'DM Mono',monospace;}
+
+/* node cards in SVG */
+.sv-node{cursor:pointer;transition:opacity 0.2s;}
+.sv-node:hover .sv-bg{filter:brightness(1.25);}
+.sv-node.faded{opacity:0.18;}
+
+/* popup */
+.er-popup{position:absolute;background:#0e1628;border:1px solid var(--border);border-radius:9px;padding:13px 16px;font-size:11px;color:var(--text);pointer-events:none;z-index:200;max-width:240px;line-height:1.7;box-shadow:0 10px 40px #00000080;opacity:0;transition:opacity 0.15s;top:0;left:0;}
+.er-popup.show{opacity:1;}
+.ep-title{font-size:12.5px;font-weight:500;margin-bottom:3px;}
+.ep-type{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px;}
+.ep-desc{font-size:11px;color:var(--muted);}
+
+/* ER legend */
+.er-legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);background:var(--surface2);}
+.ell{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);}
+.ell-swatch{width:22px;height:2px;border-radius:1px;}
+.ell-sq{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+
+/* ══════════════════════════════════════════
+   SCHEMA DIAGRAM (tab 1) — entity cards
+══════════════════════════════════════════ */
+.filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;}
+.flt-btn{display:flex;align-items:center;gap:6px;padding:6px 13px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-family:'DM Mono',monospace;font-size:10.5px;cursor:pointer;transition:all 0.18s;}
+.flt-btn:hover,.flt-btn.active{color:var(--text);border-color:var(--ac);background:var(--acb);box-shadow:0 0 12px var(--acg);}
+.flt-dot{width:8px;height:8px;border-radius:50%;background:var(--ac);}
+.diagram-canvas{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px;margin-bottom:18px;position:relative;overflow:hidden;}
+.diagram-canvas::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,#f0a50006 0%,transparent 65%);pointer-events:none;}
+.entity-grid{display:flex;flex-wrap:wrap;gap:13px;justify-content:center;align-items:flex-start;}
+.entity{border-radius:8px;border:1.5px solid;width:190px;cursor:pointer;transition:all 0.2s;overflow:hidden;}
+.entity:hover{transform:translateY(-3px);box-shadow:0 8px 26px var(--eg);}
+.entity.selected{transform:translateY(-3px);box-shadow:0 0 0 2px var(--ec),0 8px 26px var(--eg);}
+.ent-head{padding:8px 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid;}
+.ent-icon{width:19px;height:19px;border-radius:3px;background:var(--ec);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:bold;color:#000;flex-shrink:0;}
+.ent-name{font-size:10.5px;font-weight:500;color:var(--ec);letter-spacing:0.02em;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ent-type{font-size:8.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);}
+.ent-fields{padding:8px 12px;}
+.frow{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:10px;border-bottom:1px solid #ffffff05;}
+.frow:last-child{border-bottom:none;}
+.fkey{width:12px;height:12px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;flex-shrink:0;font-weight:bold;}
+.fkey.pk{background:var(--hub);color:#000;} .fkey.fk{background:var(--link);color:#fff;} .fkey.bk{background:var(--sat);color:#000;} .fkey.xx{background:#1e2d40;color:var(--muted);}
+.fname{color:var(--text);flex:1;} .fdtype{color:var(--muted);font-size:9px;}
+.detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px 26px;display:none;margin-bottom:22px;}
+.detail-panel.visible{display:block;animation:fadeUp 0.3s ease both;}
+.dp-header{display:flex;align-items:center;gap:11px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.dp-icon{width:36px;height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-size:16px;font-weight:900;}
+.dp-title{font-family:'Fraunces',serif;font-size:1.25rem;font-weight:600;}
+.dp-badge{margin-left:auto;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;padding:3px 9px;border-radius:4px;border:1px solid;}
+.close-btn{background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:3px 10px;border-radius:4px;cursor:pointer;transition:all 0.15s;}
+.close-btn:hover{border-color:var(--muted);color:var(--text);}
+.dp-body{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:560px){.dp-body{grid-template-columns:1fr;}}
+.dp-sec h3{font-size:9.5px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.dp-desc{font-size:12px;color:var(--text);line-height:1.78;opacity:0.85;}
+.rule-list{list-style:none;display:flex;flex-direction:column;gap:4px;}
+.rule-list li{font-size:11px;color:var(--muted);display:flex;gap:6px;line-height:1.55;}
+.rule-list li::before{content:'→';color:var(--ec-li,var(--hub));flex-shrink:0;}
+
+/* ══════════════════════════════════════════
+   PIPELINE STEPS (expandable)
+══════════════════════════════════════════ */
+.pipeline-steps{display:flex;flex-direction:column;gap:0;}
+.pipe-step{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px;transition:border-color 0.2s;}
+.pipe-step:hover{border-color:#2a3a55;}
+.pipe-step.open{border-color:var(--step-color);}
+.pipe-header{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;background:var(--surface);user-select:none;}
+.pipe-num{width:32px;height:32px;border-radius:50%;border:2px solid var(--step-color);color:var(--step-color);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:14px;flex-shrink:0;}
+.pipe-info{flex:1;}
+.pipe-title{font-size:12.5px;font-weight:500;color:var(--text);margin-bottom:2px;}
+.pipe-sub{font-size:10.5px;color:var(--muted);}
+.pipe-tags{display:flex;gap:5px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
+.ptag{font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid;letter-spacing:0.05em;}
+.pipe-arrow{color:var(--muted);font-size:12px;margin-left:8px;transition:transform 0.25s;flex-shrink:0;}
+.pipe-step.open .pipe-arrow{transform:rotate(180deg);}
+.pipe-body{display:none;border-top:1px solid var(--border);background:var(--surface2);}
+.pipe-step.open .pipe-body{display:block;}
+.pipe-content{padding:20px 22px;}
+.pipe-desc{font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:16px;}
+.pipe-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:620px){.pipe-cols{grid-template-columns:1fr;}}
+.pipe-col-title{font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.check-list{list-style:none;display:flex;flex-direction:column;gap:5px;}
+.check-list li{font-size:11px;color:var(--muted);display:flex;gap:7px;line-height:1.55;}
+.check-list li::before{content:'✓';color:var(--ok);flex-shrink:0;}
+.warn-list li::before{content:'⚠';color:var(--biz);flex-shrink:0;}
+pre.code{background:#070b14;border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.8;overflow-x:auto;white-space:pre;color:#c9d1e0;margin-bottom:0;}
+.kw{color:#7c6af7;font-weight:500;} .fn{color:#f0a500;} .cm{color:#3a4e6a;font-style:italic;} .st{color:#00c9a7;} .nm{color:#e05c97;}
+
+/* SQL BLOCKS (BIZ / PIT tabs) */
+.sqtabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;}
+.sqtab{padding:6px 12px;border-radius:5px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-family:'DM Mono',monospace;font-size:10.5px;cursor:pointer;transition:all 0.18s;}
+.sqtab:hover{color:var(--text);border-color:#2a3a55;}
+.sqtab.active.pit{border-color:var(--pit);color:var(--pit);background:var(--pit-dim);}
+.sqtab.active.biz{border-color:var(--biz);color:var(--biz);background:var(--biz-dim);}
+.sqblock{display:none;} .sqblock.active{display:block;}
+.sql-card{background:#080c15;border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:16px;}
+.sc-head{display:flex;align-items:center;gap:9px;padding:9px 15px;border-bottom:1px solid var(--border);background:#0d111e;}
+.sc-title{font-size:10.5px;color:var(--muted);flex:1;}
+.sc-badge{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;padding:2px 8px;border-radius:3px;}
+pre.sqlpre{padding:15px 17px;font-family:'DM Mono',monospace;font-size:10.5px;line-height:1.8;overflow-x:auto;white-space:pre;color:#c9d1e0;}
+
+/* RESULT TABLE */
+.rtw{background:#080c15;border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-top:14px;margin-bottom:16px;}
+.rth{padding:8px 15px;background:#0d111e;border-bottom:1px solid var(--border);font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px;}
+.rdot{width:7px;height:7px;border-radius:50%;}
+table.rt{width:100%;border-collapse:collapse;font-size:10.5px;}
+table.rt th{padding:7px 13px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;}
+table.rt td{padding:8px 13px;border-bottom:1px solid #0d1220;color:var(--text);}
+table.rt tr:last-child td{border-bottom:none;}
+table.rt tr:hover td{background:#0f1525;}
+.ch{color:var(--muted);font-size:9.5px;} .chub{color:var(--hub);} .csat{color:var(--sat);} .cpit{color:var(--pit);} .cbiz{color:var(--biz);} .cok{color:var(--ok);}
+
+/* FLOW (PIT tab) */
+.flow-wrap{display:flex;flex-direction:column;margin-bottom:22px;}
+.fstep{display:flex;gap:14px;align-items:flex-start;}
+.fleft{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:42px;}
+.fnum{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:900;font-size:14px;border:2px solid;flex-shrink:0;z-index:1;background:var(--bg);}
+.fline{width:2px;flex:1;min-height:20px;background:var(--border);}
+.fbody{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px 18px;margin-bottom:10px;flex:1;}
+.ftitle{font-size:12.5px;font-weight:500;color:var(--text);margin-bottom:5px;}
+.fdesc{font-size:11.5px;color:var(--muted);line-height:1.72;}
+.ftag{display:inline-block;margin-top:7px;padding:2px 9px;border-radius:4px;font-size:9.5px;border:1px solid;}
+
+/* BIZ cards */
+.biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:13px;margin-bottom:22px;}
+.biz-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.18s;}
+.biz-card:hover{border-color:#f9731630;transform:translateY(-2px);box-shadow:0 6px 22px #f9731610;}
+.bc-icon{width:30px;height:30px;border-radius:6px;background:var(--biz-dim);color:var(--biz);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-bottom:10px;}
+.bc-title{font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px;}
+.bc-body{font-size:11px;color:var(--muted);line-height:1.7;}
+
+/* QUICK REF table */
+table.qr{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:28px;}
+table.qr th{padding:8px 14px;text-align:left;font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);}
+table.qr td{padding:10px 14px;border-bottom:1px solid #ffffff04;vertical-align:middle;color:var(--muted);}
+table.qr tr:last-child td{border-bottom:none;}
+table.qr tr:hover td{background:#ffffff03;}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9.5px;border:1px solid;white-space:nowrap;}
+
+/* NOTE */
+.note{background:#0c1220;border:1px solid var(--border);border-left:3px solid var(--pit);border-radius:8px;padding:13px 17px;font-size:11.5px;color:var(--muted);line-height:1.85;margin-top:16px;}
+.note strong{color:var(--text);}
+
+@keyframes fadeDown{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── DECISION TAB ── */
+.dc-intro{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:22px;display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:600px){.dc-intro{grid-template-columns:1fr;}}
+.dc-intro-head{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.dc-intro-body{font-size:12px;color:var(--muted);line-height:1.82;}
+.dc-scorecard{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;}
+.dc-sc-head{background:var(--surface2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:10px;}
+.dc-sc-title{font-size:12px;font-weight:500;color:var(--text);flex:1;}
+.dc-sc-reset{font-size:9.5px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.15s;}
+.dc-sc-reset:hover{border-color:var(--muted);color:var(--text);}
+.dc-question{padding:14px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;}
+.dc-question:last-child{border-bottom:none;}
+.dc-q-label{font-size:11.5px;color:var(--text);margin-bottom:4px;}
+.dc-q-hint{font-size:10px;color:var(--muted);line-height:1.55;}
+.dc-options{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
+.dc-opt{padding:5px 12px;border-radius:5px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.dc-opt:hover{color:var(--text);border-color:#2a3a55;}
+.dc-opt.sel-dv{background:var(--pit-dim);color:var(--pit);border-color:var(--pit);}
+.dc-opt.sel-star{background:var(--hub-dim);color:var(--hub);border-color:var(--hub);}
+.dc-opt.sel-either{background:var(--sat-dim);color:var(--sat);border-color:var(--sat);}
+.dc-result{margin:0 0 22px;border-radius:12px;padding:22px 26px;border:2px solid;transition:all 0.3s;display:none;}
+.dc-result.show{display:block;}
+.dc-result-title{font-family:'Fraunces',serif;font-size:1.6rem;font-weight:900;margin-bottom:6px;}
+.dc-result-sub{font-size:12px;color:var(--muted);line-height:1.75;margin-bottom:14px;}
+.dc-result-pills{display:flex;gap:7px;flex-wrap:wrap;}
+.dc-rpill{font-size:10px;padding:4px 12px;border-radius:20px;border:1px solid;}
+/* use-case cards */
+.dc-usecases{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:22px;}
+.dc-uc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.18s;position:relative;overflow:hidden;}
+.dc-uc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--uc-color);}
+.dc-uc-icon{font-size:18px;margin-bottom:8px;}
+.dc-uc-title{font-size:12px;font-weight:500;color:var(--text);margin-bottom:5px;}
+.dc-uc-body{font-size:11px;color:var(--muted);line-height:1.7;}
+.dc-uc-verdict{margin-top:9px;display:inline-block;font-size:9.5px;padding:2px 9px;border-radius:4px;border:1px solid;}
+/* matrix */
+.dc-matrix{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;}
+.dc-matrix-head{background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 18px;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);}
+table.dc-tbl{width:100%;border-collapse:collapse;font-size:11px;}
+table.dc-tbl th{padding:9px 14px;text-align:left;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);}
+table.dc-tbl td{padding:10px 14px;border-bottom:1px solid #ffffff04;vertical-align:middle;color:var(--muted);}
+table.dc-tbl tr:last-child td{border-bottom:none;}
+table.dc-tbl tr:hover td{background:#ffffff03;}
+.win-dv{color:var(--pit);} .win-star{color:var(--hub);} .win-eq{color:var(--sat);}
+.dc-win-badge{display:inline-block;padding:2px 9px;border-radius:4px;font-size:9.5px;border:1px solid;white-space:nowrap;}
+.cx-legend-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:26px;}
+.cx-legend-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);}
+.cx-ls{width:26px;height:3px;border-radius:2px;}
+.cx-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.cx-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+.cx-grid1{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:720px){.cx-grid2,.cx-grid3{grid-template-columns:1fr;}}
+.cx-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 18px 14px;position:relative;overflow:hidden;}
+.cx-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--cx-accent,var(--pit));opacity:0.55;}
+.cx-card-title{font-size:12px;font-weight:500;color:var(--text);margin-bottom:4px;}
+.cx-card-sub{font-size:10.5px;color:var(--muted);line-height:1.6;margin-bottom:12px;}
+.cx-ch{position:relative;height:210px;}
+.cx-ch-wide{position:relative;height:230px;}
+.cx-pill{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);background:#0d1525;border:1px solid var(--border);border-radius:20px;padding:4px 10px;margin-top:9px;}
+.cx-pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cx-metrics-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;}
+@media(max-width:700px){.cx-metrics-row{grid-template-columns:repeat(2,1fr);}}
+.cx-metric-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.cx-metric-num{font-family:'Fraunces',serif;font-size:2rem;font-weight:900;line-height:1;}
+.cx-metric-label{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5;}
+.cx-metric-note{font-size:9px;color:var(--muted);opacity:0.7;margin-top:3px;}
+.cx-tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.cx-tbl-head{padding:10px 18px;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);background:var(--surface2);}
+.cx-bar-wrap{display:flex;align-items:center;gap:8px;}
+.cx-bar-bg{flex:1;height:5px;background:#1a2235;border-radius:3px;overflow:hidden;min-width:80px;}
+.cx-bar-fill{height:100%;border-radius:3px;}
+.cx-bval{font-size:10.5px;min-width:52px;text-align:right;}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div class="eyebrow">Data Modeling Methodology</div>
+  <h1>Data <em>Vault</em> Explorer</h1>
+  <p class="subtitle">Schema diagram, ER graphs, PIT querying, Business Vault, and an expandable load pipeline — all in one reference.</p>
+</header>
+
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('schema',this)"><span class="tab-dot" style="background:var(--hub)"></span>Schema</button>
+  <button class="nav-tab" onclick="switchTab('er',this)"><span class="tab-dot" style="background:var(--link)"></span>ER Diagrams</button>
+  <button class="nav-tab" onclick="switchTab('pit',this)"><span class="tab-dot" style="background:var(--pit)"></span>PIT Querying</button>
+  <button class="nav-tab" onclick="switchTab('biz',this)"><span class="tab-dot" style="background:var(--biz)"></span>Business Vault</button>
+  <button class="nav-tab" onclick="switchTab('pipeline',this)"><span class="tab-dot" style="background:var(--ok)"></span>Load Pipeline</button>
+  <button class="nav-tab" onclick="switchTab('ref',this)"><span class="tab-dot" style="background:var(--muted)"></span>Reference</button>
+  <button class="nav-tab" onclick="switchTab('complexity',this)"><span class="tab-dot" style="background:var(--pit)"></span>Complexity</button>
+  <button class="nav-tab" onclick="switchTab('decision',this)"><span class="tab-dot" style="background:var(--ok)"></span>When to Use</button>
+</div>
+
+<!-- ═══════════════ TAB 1: SCHEMA ═══════════════ -->
+<div class="tab-section active" id="tab-schema">
+  <div class="filter-bar">
+    <button class="flt-btn" style="--ac:var(--hub);--acb:var(--hub-dim);--acg:var(--hub-dim)" onclick="filterEnt('hub',this)"><span class="flt-dot"></span>Hub</button>
+    <button class="flt-btn" style="--ac:var(--link);--acb:var(--link-dim);--acg:var(--link-dim)" onclick="filterEnt('link',this)"><span class="flt-dot"></span>Link</button>
+    <button class="flt-btn" style="--ac:var(--sat);--acb:var(--sat-dim);--acg:var(--sat-dim)" onclick="filterEnt('sat',this)"><span class="flt-dot"></span>Satellite</button>
+    <button class="flt-btn" style="--ac:var(--pit);--acb:var(--pit-dim);--acg:var(--pit-dim)" onclick="filterEnt('pit',this)"><span class="flt-dot"></span>PIT</button>
+    <button class="flt-btn" style="--ac:var(--ref);--acb:var(--ref-dim);--acg:var(--ref-dim)" onclick="filterEnt('reft',this)"><span class="flt-dot"></span>Reference</button>
+    <button class="flt-btn" style="--ac:var(--muted);--acb:#6b7a9910;--acg:#6b7a9918" onclick="showAllEnt(this)"><span class="flt-dot"></span>All</button>
+  </div>
+  <div class="diagram-canvas">
+    <div class="entity-grid" id="entGrid">
+      <!-- HUB CUSTOMER -->
+      <div class="entity" id="e-hub-customer" style="border-color:var(--hub-dim);background:#f0a50006;--ec:var(--hub);--eg:var(--hub-dim)" onclick="selectEnt('hub-customer')">
+        <div class="ent-head" style="border-color:var(--hub-dim)"><div class="ent-icon">H</div><span class="ent-name">HUB_CUSTOMER</span><span class="ent-type">Hub</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">CUSTOMER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey bk">BK</span><span class="fname">CUSTOMER_ID</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REC_SRC</span><span class="fdtype">VARCHAR</span></div>
+        </div>
+      </div>
+      <!-- HUB ORDER -->
+      <div class="entity" id="e-hub-order" style="border-color:var(--hub-dim);background:#f0a50006;--ec:var(--hub);--eg:var(--hub-dim)" onclick="selectEnt('hub-order')">
+        <div class="ent-head" style="border-color:var(--hub-dim)"><div class="ent-icon">H</div><span class="ent-name">HUB_ORDER</span><span class="ent-type">Hub</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">ORDER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey bk">BK</span><span class="fname">ORDER_NUMBER</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REC_SRC</span><span class="fdtype">VARCHAR</span></div>
+        </div>
+      </div>
+      <!-- HUB PRODUCT -->
+      <div class="entity" id="e-hub-product" style="border-color:var(--hub-dim);background:#f0a50006;--ec:var(--hub);--eg:var(--hub-dim)" onclick="selectEnt('hub-product')">
+        <div class="ent-head" style="border-color:var(--hub-dim)"><div class="ent-icon">H</div><span class="ent-name">HUB_PRODUCT</span><span class="ent-type">Hub</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">PRODUCT_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey bk">BK</span><span class="fname">PRODUCT_SKU</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REC_SRC</span><span class="fdtype">VARCHAR</span></div>
+        </div>
+      </div>
+      <!-- LINK -->
+      <div class="entity" id="e-link-co" style="border-color:var(--link-dim);background:#e05c9706;--ec:var(--link);--eg:var(--link-dim)" onclick="selectEnt('link-co')">
+        <div class="ent-head" style="border-color:var(--link-dim)"><div class="ent-icon" style="background:var(--link);color:#fff">L</div><span class="ent-name">LNK_CUST_ORDER</span><span class="ent-type">Link</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">CUST_ORD_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">CUSTOMER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">ORDER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REC_SRC</span><span class="fdtype">VARCHAR</span></div>
+        </div>
+      </div>
+      <!-- LINK ORDER PRODUCT -->
+      <div class="entity" id="e-link-op" style="border-color:var(--link-dim);background:#e05c9706;--ec:var(--link);--eg:var(--link-dim)" onclick="selectEnt('link-op')">
+        <div class="ent-head" style="border-color:var(--link-dim)"><div class="ent-icon" style="background:var(--link);color:#fff">L</div><span class="ent-name">LNK_ORD_PRODUCT</span><span class="ent-type">Link</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">ORD_PROD_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">ORDER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">PRODUCT_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REC_SRC</span><span class="fdtype">VARCHAR</span></div>
+        </div>
+      </div>
+      <!-- SAT CUST DETAILS -->
+      <div class="entity" id="e-sat-cust" style="border-color:var(--sat-dim);background:#00c9a706;--ec:var(--sat);--eg:var(--sat-dim)" onclick="selectEnt('sat-cust')">
+        <div class="ent-head" style="border-color:var(--sat-dim)"><div class="ent-icon" style="background:var(--sat)">S</div><span class="ent-name">SAT_CUST_DETAILS</span><span class="ent-type">Sat</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">CUSTOMER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">FULL_NAME</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">EMAIL</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">HASH_DIFF</span><span class="fdtype">HASH</span></div>
+        </div>
+      </div>
+      <!-- SAT CUST CONTACT -->
+      <div class="entity" id="e-sat-contact" style="border-color:var(--sat-dim);background:#00c9a706;--ec:var(--sat);--eg:var(--sat-dim)" onclick="selectEnt('sat-contact')">
+        <div class="ent-head" style="border-color:var(--sat-dim)"><div class="ent-icon" style="background:var(--sat)">S</div><span class="ent-name">SAT_CUST_CONTACT</span><span class="ent-type">Sat</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">CUSTOMER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">PHONE</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">COUNTRY_CODE</span><span class="fdtype">CHAR(2)</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">HASH_DIFF</span><span class="fdtype">HASH</span></div>
+        </div>
+      </div>
+      <!-- SAT ORDER STATUS -->
+      <div class="entity" id="e-sat-ord" style="border-color:var(--sat-dim);background:#00c9a706;--ec:var(--sat);--eg:var(--sat-dim)" onclick="selectEnt('sat-ord')">
+        <div class="ent-head" style="border-color:var(--sat-dim)"><div class="ent-icon" style="background:var(--sat)">S</div><span class="ent-name">SAT_ORDER_STATUS</span><span class="ent-type">Sat</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">ORDER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">STATUS</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">TOTAL_AMT</span><span class="fdtype">DECIMAL</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">HASH_DIFF</span><span class="fdtype">HASH</span></div>
+        </div>
+      </div>
+      <!-- PIT -->
+      <div class="entity" id="e-pit" style="border-color:var(--pit-dim);background:#7c6af706;--ec:var(--pit);--eg:var(--pit-dim)" onclick="selectEnt('pit')">
+        <div class="ent-head" style="border-color:var(--pit-dim)"><div class="ent-icon" style="background:var(--pit)">P</div><span class="ent-name">PIT_CUSTOMER</span><span class="ent-type">PIT</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey fk">FK</span><span class="fname">CUSTOMER_HK</span><span class="fdtype">HASH</span></div>
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">SNAPSHOT_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">SAT_DETAILS_LDTS</span><span class="fdtype">TIMESTAMP</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">SAT_CONTACT_LDTS</span><span class="fdtype">TIMESTAMP</span></div>
+        </div>
+      </div>
+      <!-- REF -->
+      <div class="entity" id="e-ref" style="border-color:var(--ref-dim);background:#4fc3f706;--ec:var(--ref);--eg:var(--ref-dim)" onclick="selectEnt('reft')">
+        <div class="ent-head" style="border-color:var(--ref-dim)"><div class="ent-icon" style="background:var(--ref);color:#000">R</div><span class="ent-name">REF_COUNTRY</span><span class="ent-type">Ref</span></div>
+        <div class="ent-fields">
+          <div class="frow"><span class="fkey pk">PK</span><span class="fname">COUNTRY_CODE</span><span class="fdtype">CHAR(2)</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">COUNTRY_NAME</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">REGION</span><span class="fdtype">VARCHAR</span></div>
+          <div class="frow"><span class="fkey xx">—</span><span class="fname">LOAD_DTS</span><span class="fdtype">TIMESTAMP</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+<!-- ═══════════════ TAB 2: ER DIAGRAMS ═══════════════ -->
+<div class="tab-section" id="tab-er">
+  <div class="sqtabs" id="erPerspTabs">
+    <button class="sqtab active pit" onclick="switchERView('raw',this)">🏗 Raw Vault</button>
+    <button class="sqtab pit" onclick="switchERView('biz',this)">⚙️ Business Vault</button>
+  </div>
+
+  <!-- RAW VAULT ER -->
+  <div id="er-raw" class="sqblock active">
+    <div class="er-container">
+      <div class="er-toolbar">
+        <span class="er-label">Raw Vault — Entity Relationships</span>
+        <span class="er-hint">hover a node to highlight its connections</span>
+      </div>
+      <div class="er-svg-scroll" style="position:relative;" id="rawErWrap">
+        <svg class="er-svg" id="rawErSvg" width="1060" height="540" viewBox="0 0 1060 540"></svg>
+        <div class="er-popup" id="rawPopup"></div>
+      </div>
+      <div class="er-legend">
+        <div class="ell"><span class="ell-sq" style="background:var(--hub)"></span>Hub</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--link)"></span>Link</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--sat)"></span>Satellite</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--pit)"></span>PIT</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--ref)"></span>Reference</div>
+        <div class="ell"><span class="ell-swatch" style="background:var(--link)"></span>FK relationship</div>
+        <div class="ell"><span class="ell-swatch" style="background:var(--pit);height:2px;border-top:2px dashed var(--pit);background:transparent"></span>PIT→Sat pointer</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUSINESS VAULT ER -->
+  <div id="er-biz" class="sqblock">
+    <div class="er-container">
+      <div class="er-toolbar">
+        <span class="er-label">Business Vault — Entity Relationships</span>
+        <button class="toggle-btn" id="crossToggle" onclick="toggleCrossLayer()">
+          <span style="font-size:11px">⬡</span> Show Raw Vault links
+        </button>
+        <span class="er-hint">toggle to see how biz vault tables depend on raw vault</span>
+      </div>
+      <div class="er-svg-scroll" style="position:relative;" id="bizErWrap">
+        <svg class="er-svg" id="bizErSvg" width="1060" height="580" viewBox="0 0 1060 580"></svg>
+        <div class="er-popup" id="bizPopup"></div>
+      </div>
+      <div class="er-legend">
+        <div class="ell"><span class="ell-sq" style="background:var(--hub)"></span>Hub (Raw)</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--sat)"></span>Satellite (Raw)</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--biz)"></span>bSAT (Business)</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--sal)"></span>SAL (Same-As Link)</div>
+        <div class="ell"><span class="ell-sq" style="background:var(--pit)"></span>PIT</div>
+        <div class="ell"><span class="ell-swatch" style="background:var(--biz)"></span>Business relationship</div>
+        <div class="ell"><span class="ell-swatch" style="background:var(--cross);height:2px;border-top:2px dashed var(--cross);background:transparent"></span>Cross-layer (Raw→Biz)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 3: PIT ═══════════════ -->
+<div class="tab-section" id="tab-pit">
+  <div class="slabel">The problem PIT tables solve</div>
+  <div class="flow-wrap">
+    <div class="fstep"><div class="fleft"><div class="fnum" style="border-color:var(--sat);color:var(--sat)">1</div><div class="fline"></div></div><div class="fbody"><div class="ftitle">Multiple satellites per Hub update independently</div><div class="fdesc">HUB_CUSTOMER has SAT_CUST_DETAILS and SAT_CUST_CONTACT. Each has its own timeline. A name change doesn't create a new contact row, and vice versa.</div><span class="ftag" style="color:var(--sat);border-color:var(--sat-dim);background:var(--sat-dim)">SAT_CUST_DETAILS + SAT_CUST_CONTACT</span></div></div>
+    <div class="fstep"><div class="fleft"><div class="fnum" style="border-color:var(--link);color:var(--link)">2</div><div class="fline"></div></div><div class="fbody"><div class="ftitle">Joining them at a point-in-time is painful</div><div class="fdesc">Every satellite needs a correlated subquery to find "most recent row ≤ snapshot date". With 4+ satellites this becomes deeply nested and slow.</div><span class="ftag" style="color:var(--link);border-color:var(--link-dim);background:var(--link-dim)">One correlated subquery per satellite</span></div></div>
+    <div class="fstep"><div class="fleft"><div class="fnum" style="border-color:var(--pit);color:var(--pit)">3</div></div><div class="fbody"><div class="ftitle">PIT pre-computes the join keys</div><div class="fdesc">One row per customer × snapshot date. Each satellite gets a column: its effective LOAD_DTS at that moment. Downstream: simple equi-joins, no subqueries.</div><span class="ftag" style="color:var(--pit);border-color:var(--pit-dim);background:var(--pit-dim)">O(1) per satellite join</span></div></div>
+  </div>
+  <div class="sqtabs" id="pitSqlTabs">
+    <button class="sqtab active pit" onclick="showSqlBlock('pit','without',this)">① Without PIT</button>
+    <button class="sqtab pit" onclick="showSqlBlock('pit','build',this)">② Build PIT</button>
+    <button class="sqtab pit" onclick="showSqlBlock('pit','with',this)">③ Query with PIT</button>
+  </div>
+  <div id="pit-sql-without" class="sqblock active">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">Without PIT — correlated subquery per satellite</span><span class="sc-badge" style="background:var(--link-dim);color:var(--link);border:1px solid var(--link-dim)">BEFORE</span></div>
+<pre class="sqlpre"><span class="cm">-- "What did we know about each customer on 2024-01-15?"</span>
+<span class="kw">SELECT</span> h.CUSTOMER_ID, d.FULL_NAME, d.EMAIL, c.PHONE
+<span class="kw">FROM</span> HUB_CUSTOMER h
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS d
+  <span class="kw">ON</span>  d.CUSTOMER_HK = h.CUSTOMER_HK
+ <span class="kw">AND</span>  d.LOAD_DTS = (<span class="kw">SELECT MAX</span>(d2.LOAD_DTS) <span class="kw">FROM</span> SAT_CUST_DETAILS d2
+                     <span class="kw">WHERE</span> d2.CUSTOMER_HK = h.CUSTOMER_HK
+                       <span class="kw">AND</span> d2.LOAD_DTS &lt;= <span class="st">'2024-01-15'</span>)
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT c
+  <span class="kw">ON</span>  c.CUSTOMER_HK = h.CUSTOMER_HK
+ <span class="kw">AND</span>  c.LOAD_DTS = (<span class="kw">SELECT MAX</span>(c2.LOAD_DTS) <span class="kw">FROM</span> SAT_CUST_CONTACT c2
+                     <span class="kw">WHERE</span> c2.CUSTOMER_HK = h.CUSTOMER_HK
+                       <span class="kw">AND</span> c2.LOAD_DTS &lt;= <span class="st">'2024-01-15'</span>);
+<span class="cm">-- 6 satellites = 6 correlated subqueries. Painful.</span></pre></div>
+  </div>
+  <div id="pit-sql-build" class="sqblock">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">Build PIT_CUSTOMER — run on a daily schedule</span><span class="sc-badge" style="background:var(--pit-dim);color:var(--pit);border:1px solid var(--pit-dim)">BUILD</span></div>
+<pre class="sqlpre"><span class="kw">WITH</span> snapshots <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> h.CUSTOMER_HK, s.SNAPSHOT_DTS
+  <span class="kw">FROM</span> HUB_CUSTOMER h
+  <span class="kw">CROSS JOIN</span> (<span class="kw">SELECT</span> dt::TIMESTAMP <span class="kw">AS</span> SNAPSHOT_DTS <span class="kw">FROM</span> DATE_SPINE) s
+)
+<span class="kw">INSERT INTO</span> PIT_CUSTOMER (CUSTOMER_HK, SNAPSHOT_DTS, SAT_DETAILS_LDTS, SAT_CONTACT_LDTS)
+<span class="kw">SELECT</span>
+  sn.CUSTOMER_HK, sn.SNAPSHOT_DTS,
+  <span class="fn">MAX</span>(d.LOAD_DTS) <span class="kw">FILTER</span>(<span class="kw">WHERE</span> d.LOAD_DTS &lt;= sn.SNAPSHOT_DTS) <span class="kw">AS</span> SAT_DETAILS_LDTS,
+  <span class="fn">MAX</span>(c.LOAD_DTS) <span class="kw">FILTER</span>(<span class="kw">WHERE</span> c.LOAD_DTS &lt;= sn.SNAPSHOT_DTS) <span class="kw">AS</span> SAT_CONTACT_LDTS
+<span class="kw">FROM</span> snapshots sn
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS  d <span class="kw">ON</span> d.CUSTOMER_HK = sn.CUSTOMER_HK
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT  c <span class="kw">ON</span> c.CUSTOMER_HK = sn.CUSTOMER_HK
+<span class="kw">GROUP BY</span> sn.CUSTOMER_HK, sn.SNAPSHOT_DTS;</pre></div>
+    <div class="rtw"><div class="rth"><span class="rdot" style="background:var(--pit)"></span>PIT_CUSTOMER sample rows</div>
+      <table class="rt"><thead><tr><th>CUSTOMER_HK</th><th>SNAPSHOT_DTS</th><th>SAT_DETAILS_LDTS</th><th>SAT_CONTACT_LDTS</th></tr></thead>
+      <tbody>
+        <tr><td class="ch">a1b2c3…</td><td class="cpit">2024-01-10</td><td class="csat">2024-01-10 08:00</td><td class="csat">2024-01-10 08:00</td></tr>
+        <tr><td class="ch">a1b2c3…</td><td class="cpit">2024-01-14</td><td class="csat">2024-01-13 14:22</td><td class="csat">2024-01-10 08:00</td></tr>
+        <tr><td class="ch">a1b2c3…</td><td class="cpit">2024-01-15</td><td class="csat">2024-01-13 14:22</td><td class="csat">2024-01-15 09:01</td></tr>
+      </tbody></table></div>
+  </div>
+  <div id="pit-sql-with" class="sqblock">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">With PIT — clean equi-joins, no subqueries</span><span class="sc-badge" style="background:#34d39920;color:var(--ok);border:1px solid var(--ok)40">AFTER</span></div>
+<pre class="sqlpre"><span class="kw">SELECT</span> h.CUSTOMER_ID, d.FULL_NAME, d.EMAIL, c.PHONE, c.COUNTRY_CODE
+<span class="kw">FROM</span> PIT_CUSTOMER pit
+<span class="kw">JOIN</span>      HUB_CUSTOMER    h  <span class="kw">ON</span> h.CUSTOMER_HK = pit.CUSTOMER_HK
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS d  <span class="kw">ON</span> d.CUSTOMER_HK = pit.CUSTOMER_HK
+                              <span class="kw">AND</span> d.LOAD_DTS    = pit.SAT_DETAILS_LDTS
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT c  <span class="kw">ON</span> c.CUSTOMER_HK = pit.CUSTOMER_HK
+                              <span class="kw">AND</span> c.LOAD_DTS    = pit.SAT_CONTACT_LDTS
+<span class="kw">WHERE</span> pit.SNAPSHOT_DTS = <span class="st">'2024-01-15'</span>;
+<span class="cm">-- Works identically for 10 satellites — just add 10 equi-joins.</span></pre></div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 4: BUSINESS VAULT ═══════════════ -->
+<div class="tab-section" id="tab-biz">
+  <div style="background:var(--surface);border:1px solid var(--biz-dim);border-left:3px solid var(--biz);border-radius:9px;padding:16px 20px;margin-bottom:22px">
+    <div style="font-size:12.5px;font-weight:500;color:var(--biz);margin-bottom:7px">What is the Business Vault?</div>
+    <p style="font-size:12px;color:var(--muted);line-height:1.82">The Business Vault sits on top of Raw Vault. It applies <strong style="color:var(--text)">business rules, calculations, and derived logic</strong>. Still insert-only and auditable — but speaks the language of the business, not the source system.</p>
+  </div>
+  <div class="slabel">Components</div>
+  <div class="biz-grid">
+    <div class="biz-card"><div class="bc-icon">bSAT</div><div class="bc-title">Business Satellite</div><div class="bc-body">Derived attributes computed from raw vault. E.g., CUSTOMER_SEGMENT from order history. Same structure as raw sat — but populated by a business rule, not a source feed.</div></div>
+    <div class="biz-card"><div class="bc-icon">SAL</div><div class="bc-title">Same-As Link</div><div class="bc-body">Links two hub keys that represent the same real-world entity across different systems. Used for identity resolution between CRM and ERP customer IDs.</div></div>
+    <div class="biz-card"><div class="bc-icon">xRef</div><div class="bc-title">Cross-Reference</div><div class="bc-body">Maps business keys across source systems into a unified key namespace. Complements SALs for master data management scenarios.</div></div>
+    <div class="biz-card"><div class="bc-icon">BRDG</div><div class="bc-title">Bridge Table</div><div class="bc-body">Like a PIT for Links — pre-computes multi-hop relationship joins. E.g., Customer → Order → Product flattened for fast mart queries.</div></div>
+  </div>
+  <div class="sqtabs" id="bizSqlTabs">
+    <button class="sqtab active biz" onclick="showSqlBlock('biz','bsat',this)">① Build bSAT</button>
+    <button class="sqtab biz" onclick="showSqlBlock('biz','sal',this)">② Same-As Link</button>
+    <button class="sqtab biz" onclick="showSqlBlock('biz','mart',this)">③ Info Mart view</button>
+  </div>
+  <div id="biz-sql-bsat" class="sqblock active">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">BSAT_CUST_SEGMENT — deriving customer tier from order history</span><span class="sc-badge" style="background:var(--biz-dim);color:var(--biz);border:1px solid var(--biz-dim)">bSAT</span></div>
+<pre class="sqlpre"><span class="kw">INSERT INTO</span> BSAT_CUST_SEGMENT (CUSTOMER_HK,LOAD_DTS,SEGMENT,LIFETIME_VALUE,HASH_DIFF,RULE_VERSION)
+<span class="kw">WITH</span> totals <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> l.CUSTOMER_HK, <span class="fn">SUM</span>(s.TOTAL_AMT) <span class="kw">AS</span> LTV
+  <span class="kw">FROM</span>  LNK_CUST_ORDER l
+  <span class="kw">JOIN</span>  SAT_ORDER_STATUS s <span class="kw">ON</span> s.ORDER_HK = l.ORDER_HK
+   <span class="kw">AND</span>  s.LOAD_DTS = (<span class="kw">SELECT MAX</span>(x.LOAD_DTS) <span class="kw">FROM</span> SAT_ORDER_STATUS x <span class="kw">WHERE</span> x.ORDER_HK=l.ORDER_HK)
+  <span class="kw">GROUP BY</span> l.CUSTOMER_HK
+)
+<span class="kw">SELECT</span>
+  CUSTOMER_HK, <span class="fn">CURRENT_TIMESTAMP</span>,
+  <span class="kw">CASE WHEN</span> LTV >= <span class="nm">10000</span> <span class="kw">THEN</span> <span class="st">'PLATINUM'</span>
+       <span class="kw">WHEN</span> LTV >= <span class="nm">1000</span>  <span class="kw">THEN</span> <span class="st">'GOLD'</span>
+       <span class="kw">WHEN</span> LTV >= <span class="nm">100</span>   <span class="kw">THEN</span> <span class="st">'SILVER'</span>
+       <span class="kw">ELSE</span> <span class="st">'BRONZE'</span> <span class="kw">END</span>,
+  LTV, <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(CUSTOMER_HK,LTV)), <span class="st">'v1.2'</span>
+<span class="kw">FROM</span> totals t
+<span class="kw">WHERE NOT EXISTS</span> (<span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> BSAT_CUST_SEGMENT b
+  <span class="kw">WHERE</span> b.CUSTOMER_HK=t.CUSTOMER_HK <span class="kw">AND</span> b.HASH_DIFF=<span class="fn">MD5</span>(<span class="fn">CONCAT</span>(t.CUSTOMER_HK,t.LTV)));</pre></div>
+  </div>
+  <div id="biz-sql-sal" class="sqblock">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">SAL_CUSTOMER — identity resolution across CRM and ERP</span><span class="sc-badge" style="background:var(--sal-dim);color:var(--sal);border:1px solid var(--sal-dim)">SAL</span></div>
+<pre class="sqlpre"><span class="kw">INSERT INTO</span> SAL_CUSTOMER (SAL_HK,CUSTOMER_HK_1,CUSTOMER_HK_2,LOAD_DTS,REC_SRC,CONFIDENCE)
+<span class="kw">SELECT</span>
+  <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(<span class="fn">MD5</span>(m.CRM_ID),<span class="st">'||'</span>,<span class="fn">MD5</span>(m.ERP_ID))),
+  <span class="fn">MD5</span>(m.CRM_ID), <span class="fn">MD5</span>(m.ERP_ID),
+  <span class="fn">CURRENT_TIMESTAMP</span>, <span class="st">'MDM_SYSTEM'</span>, m.CONFIDENCE_SCORE
+<span class="kw">FROM</span> mdm_match_results m
+<span class="kw">WHERE NOT EXISTS</span> (<span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> SAL_CUSTOMER s
+  <span class="kw">WHERE</span> s.SAL_HK = <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(<span class="fn">MD5</span>(m.CRM_ID),<span class="st">'||'</span>,<span class="fn">MD5</span>(m.ERP_ID))));</pre></div>
+  </div>
+  <div id="biz-sql-mart" class="sqblock">
+    <div class="sql-card"><div class="sc-head"><span class="sc-title">DIM_CUSTOMER — Info Mart view for BI tools</span><span class="sc-badge" style="background:#34d39918;color:var(--ok);border:1px solid var(--ok)40">MART</span></div>
+<pre class="sqlpre"><span class="kw">CREATE OR REPLACE VIEW</span> DIM_CUSTOMER <span class="kw">AS</span>
+<span class="kw">SELECT</span>
+  h.CUSTOMER_ID, d.FULL_NAME, d.EMAIL, c.PHONE,
+  r.COUNTRY_NAME, r.REGION,
+  seg.SEGMENT <span class="kw">AS</span> CUSTOMER_SEGMENT, seg.LIFETIME_VALUE
+<span class="kw">FROM</span> HUB_CUSTOMER h
+<span class="kw">JOIN</span> PIT_CUSTOMER pit <span class="kw">ON</span> pit.CUSTOMER_HK = h.CUSTOMER_HK
+  <span class="kw">AND</span> pit.SNAPSHOT_DTS = (<span class="kw">SELECT MAX</span>(p2.SNAPSHOT_DTS) <span class="kw">FROM</span> PIT_CUSTOMER p2 <span class="kw">WHERE</span> p2.CUSTOMER_HK=h.CUSTOMER_HK)
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS  d   <span class="kw">ON</span> d.CUSTOMER_HK=pit.CUSTOMER_HK <span class="kw">AND</span> d.LOAD_DTS=pit.SAT_DETAILS_LDTS
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT  c   <span class="kw">ON</span> c.CUSTOMER_HK=pit.CUSTOMER_HK <span class="kw">AND</span> c.LOAD_DTS=pit.SAT_CONTACT_LDTS
+<span class="kw">LEFT JOIN</span> BSAT_CUST_SEGMENT seg <span class="kw">ON</span> seg.CUSTOMER_HK=h.CUSTOMER_HK
+  <span class="kw">AND</span> seg.LOAD_DTS=(<span class="kw">SELECT MAX</span>(s2.LOAD_DTS) <span class="kw">FROM</span> BSAT_CUST_SEGMENT s2 <span class="kw">WHERE</span> s2.CUSTOMER_HK=h.CUSTOMER_HK)
+<span class="kw">LEFT JOIN</span> REF_COUNTRY r <span class="kw">ON</span> r.COUNTRY_CODE=c.COUNTRY_CODE;</pre></div>
+    <div class="rtw"><div class="rth"><span class="rdot" style="background:var(--ok)"></span>DIM_CUSTOMER — analyst view</div>
+      <table class="rt"><thead><tr><th>CUSTOMER_ID</th><th>FULL_NAME</th><th>EMAIL</th><th>COUNTRY</th><th>SEGMENT</th><th>LIFETIME_VALUE</th></tr></thead>
+      <tbody>
+        <tr><td class="chub">C001</td><td>Alice Sharma</td><td class="csat">alice.new@example.com</td><td>United Kingdom</td><td class="cbiz">GOLD</td><td class="cok">£2,340.00</td></tr>
+        <tr><td class="chub">C002</td><td>Bob Tran</td><td class="csat">bob@example.com</td><td>United States</td><td class="cbiz">SILVER</td><td class="cok">£440.50</td></tr>
+      </tbody></table></div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 5: LOAD PIPELINE ═══════════════ -->
+<div class="tab-section" id="tab-pipeline">
+  <div class="slabel" style="margin-bottom:18px">Click any step to expand — includes sample code and implementation notes</div>
+  <div class="pipeline-steps" id="pipelineSteps"></div>
+</div>
+
+<!-- ═══════════════ TAB 6: REFERENCE ═══════════════ -->
+<div class="tab-section" id="tab-ref">
+  <div class="slabel">Component cheat sheet</div>
+  <table class="qr">
+    <thead><tr><th>Component</th><th>Prefix</th><th>Purpose</th><th>Mandatory Columns</th><th>Key Type</th><th>Insert-Only?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag" style="background:var(--hub-dim);color:var(--hub);border-color:var(--hub-dim)">Hub</span></td><td>HUB_</td><td>Unique business entity</td><td>HK, BK, LOAD_DTS, REC_SRC</td><td>Hash(BK)</td><td class="cok">Yes</td></tr>
+      <tr><td><span class="tag" style="background:var(--link-dim);color:var(--link);border-color:var(--link-dim)">Link</span></td><td>LNK_</td><td>Relationship between hubs</td><td>HK, FK×N, LOAD_DTS, REC_SRC</td><td>Hash(all FKs)</td><td class="cok">Yes</td></tr>
+      <tr><td><span class="tag" style="background:var(--sat-dim);color:var(--sat);border-color:var(--sat-dim)">Satellite</span></td><td>SAT_</td><td>Descriptive attrs + history</td><td>FK(HK), LOAD_DTS, HASH_DIFF, REC_SRC</td><td>Composite(FK+LDTS)</td><td class="cok">Yes</td></tr>
+      <tr><td><span class="tag" style="background:var(--pit-dim);color:var(--pit);border-color:var(--pit-dim)">PIT</span></td><td>PIT_</td><td>Snapshot join accelerator</td><td>FK(HK), SNAPSHOT_DTS, SAT_*_LDTS</td><td>Composite(FK+snap)</td><td style="color:var(--link)">Rebuilt</td></tr>
+      <tr><td><span class="tag" style="background:var(--biz-dim);color:var(--biz);border-color:var(--biz-dim)">bSAT</span></td><td>BSAT_</td><td>Derived/calculated attrs</td><td>FK(HK), LOAD_DTS, HASH_DIFF, RULE_VERSION</td><td>Composite(FK+LDTS)</td><td class="cok">Yes</td></tr>
+      <tr><td><span class="tag" style="background:var(--sal-dim);color:var(--sal);border-color:var(--sal-dim)">SAL</span></td><td>SAL_</td><td>Identity resolution</td><td>SAL_HK, HK_1, HK_2, LOAD_DTS, REC_SRC</td><td>Hash(HK1+HK2)</td><td class="cok">Yes</td></tr>
+      <tr><td><span class="tag" style="background:var(--ref-dim);color:var(--ref);border-color:var(--ref-dim)">Reference</span></td><td>REF_</td><td>Static lookup codes</td><td>Natural key, attrs, LOAD_DTS</td><td>Natural key</td><td>Usually</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Loading order rule:</strong> Staging → Hubs → Links → Satellites → PIT (rebuild) → Business Vault bSATs → Info Mart views. Links depend on hubs; satellites depend on hubs/links; PIT depends on satellites. Never skip layers.</div>
+</div>
+<!-- ═══════════════ TAB: COMPLEXITY ═══════════════ -->
+<div class="tab-section" id="tab-complexity">
+
+  <div class="cx-legend-row">
+    <div class="cx-legend-item"><span class="cx-ls" style="background:#7c6af7"></span>Data Vault (full stack)</div>
+    <div class="cx-legend-item"><span class="cx-ls" style="background:#f0a500"></span>Dimensional / Star Schema</div>
+    <div class="cx-legend-item"><span class="cx-ls" style="background:#00c9a7"></span>DV Info Mart (query layer)</div>
+    <div class="cx-legend-item"><span class="cx-ls" style="border-top:2px dashed #f97316;background:transparent"></span>Parallelism break-even</div>
+  </div>
+
+  <div class="slabel">At-a-glance multipliers — medium domain (~20 source entities)</div>
+  <div class="cx-metrics-row">
+    <div class="cx-metric-card"><div class="cx-metric-num" style="color:#7c6af7">3–5×</div><div class="cx-metric-label">More tables</div><div class="cx-metric-note">vs star schema</div></div>
+    <div class="cx-metric-card"><div class="cx-metric-num" style="color:#7c6af7">1.5–3×</div><div class="cx-metric-label">More rows stored</div><div class="cx-metric-note">hubs + links overhead</div></div>
+    <div class="cx-metric-card"><div class="cx-metric-num" style="color:#f97316">4–8×</div><div class="cx-metric-label">More joins per query</div><div class="cx-metric-note">raw vault; 1× via mart</div></div>
+    <div class="cx-metric-card"><div class="cx-metric-num" style="color:#f97316">2–4×</div><div class="cx-metric-label">More ETL steps</div><div class="cx-metric-note">but parallelizable</div></div>
+    <div class="cx-metric-card"><div class="cx-metric-num" style="color:#34d399">~1×</div><div class="cx-metric-label">Query runtime</div><div class="cx-metric-note">via info mart + PIT</div></div>
+  </div>
+
+  <div class="slabel">Storage complexity as domain scales</div>
+  <div class="cx-grid2">
+    <div class="cx-card" style="--cx-accent:#7c6af7">
+      <div class="cx-card-title">Table Count vs. Domain Entities</div>
+      <div class="cx-card-sub">Number of tables as you model more source entities. DV splits every entity into hub + N satellites + PIT.</div>
+      <div class="cx-ch"><canvas id="cTableCount"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#7c6af7"></span>DV slope ≈ 4–6 tables per entity; Star ≈ 1.2</div>
+    </div>
+    <div class="cx-card" style="--cx-accent:#f0a500">
+      <div class="cx-card-title">Row Count Multiplier vs. Source Volume</div>
+      <div class="cx-card-sub">Total rows stored relative to raw source row count. DV satellite history ≈ SCD2 but split across more tables.</div>
+      <div class="cx-ch"><canvas id="cRowCount"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#7c6af7"></span>DV: ~1.5–3× source rows; Star SCD2: ~1.2–2×</div>
+    </div>
+  </div>
+
+  <div class="slabel">ETL & load compute complexity</div>
+  <div class="cx-grid2">
+    <div class="cx-card" style="--cx-accent:#f97316">
+      <div class="cx-card-title">ETL Pipeline Steps vs. Domain Entities</div>
+      <div class="cx-card-sub">Number of distinct load jobs. DV has more steps but they're independent and parallelizable after hubs.</div>
+      <div class="cx-ch"><canvas id="cEtlSteps"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#f97316"></span>DV parallelism closes wall-clock gap significantly</div>
+    </div>
+    <div class="cx-card" style="--cx-accent:#7c6af7">
+      <div class="cx-card-title">Load Compute (CPU·s) vs. Source Rows</div>
+      <div class="cx-card-sub">Approximate compute cost of loading N source rows. DV overhead: hashing every key, HASH_DIFF checks, multi-table inserts.</div>
+      <div class="cx-ch"><canvas id="cLoadCompute"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#7c6af7"></span>DV load cost ≈ 2–3× star; hash compute is the driver</div>
+    </div>
+  </div>
+
+  <div class="slabel">Query / runtime complexity</div>
+  <div class="cx-grid3">
+    <div class="cx-card" style="--cx-accent:#f97316">
+      <div class="cx-card-title">Join Depth per Query</div>
+      <div class="cx-card-sub">Joins needed to answer a typical current-state business question.</div>
+      <div class="cx-ch"><canvas id="cJoinDepth"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#00c9a7"></span>Info mart collapses to 1–2 joins</div>
+    </div>
+    <div class="cx-card" style="--cx-accent:#7c6af7">
+      <div class="cx-card-title">Query Runtime vs. Satellite Count</div>
+      <div class="cx-card-sub">Wall-clock query time as satellites per hub increase. With vs without PIT.</div>
+      <div class="cx-ch"><canvas id="cQueryTime"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#7c6af7"></span>PIT flattens runtime growth to near-linear</div>
+    </div>
+    <div class="cx-card" style="--cx-accent:#00c9a7">
+      <div class="cx-card-title">Time-Travel Query Cost</div>
+      <div class="cx-card-sub">Cost of querying "as-of date X" as history depth grows.</div>
+      <div class="cx-ch"><canvas id="cTimeTravelCost"></canvas></div>
+      <div class="cx-pill"><span class="cx-pill-dot" style="background:#00c9a7"></span>DV time-travel is O(1) with PIT; SCD2 scans grow</div>
+    </div>
+  </div>
+
+  <div class="slabel">Overall cost surface — storage + compute + query combined</div>
+  <div class="cx-grid1">
+    <div class="cx-card" style="--cx-accent:#7c6af7">
+      <div class="cx-card-title">Total Weighted Complexity Score vs. Domain Scale</div>
+      <div class="cx-card-sub">Composite index (equal-weighted: table count + row overhead + ETL steps + query joins + load compute), normalised to dimensional = 1.0. Shows where DV overhead is felt most and where it pays back.</div>
+      <div class="cx-ch-wide"><canvas id="cOverall"></canvas></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+        <div class="cx-pill"><span class="cx-pill-dot" style="background:#f97316"></span>DV overhead peaks at small domain</div>
+        <div class="cx-pill"><span class="cx-pill-dot" style="background:#34d399"></span>Break-even ~15–20 entities</div>
+        <div class="cx-pill"><span class="cx-pill-dot" style="background:#00c9a7"></span>Info mart recovers query cost throughout</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slabel">Summary — complexity multipliers at medium scale (~20 entities)</div>
+  <div class="cx-tbl-card">
+    <div class="cx-tbl-head">All multipliers are approximate; assume well-optimised implementations of both approaches</div>
+    <table class="qr">
+      <thead><tr><th>Axis</th><th>Dimensional</th><th>Data Vault (Raw)</th><th>DV + Info Mart</th><th>DV multiplier</th><th>Mitigant</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text);font-weight:500">Table count</td><td>~25</td><td>~90–120</td><td>~25 (mart)</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:80%;background:#7c6af7"></div></div><span class="cx-bval" style="color:#7c6af7">4–5×</span></div></td><td>Tooling auto-generates boilerplate</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Rows stored</td><td>1.0× source</td><td>1.5–3× source</td><td>same as raw</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:40%;background:#7c6af7"></div></div><span class="cx-bval" style="color:#7c6af7">~2×</span></div></td><td>Columnar storage compresses well</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">ETL steps</td><td>1× per entity</td><td>3–4× per entity</td><td>same</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:65%;background:#f97316"></div></div><span class="cx-bval" style="color:#f97316">3–4×</span></div></td><td>Parallel execution; wall-clock ~1.3–1.8×</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Load compute</td><td>1×</td><td>2–3×</td><td>same</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:50%;background:#f97316"></div></div><span class="cx-bval" style="color:#f97316">2–3×</span></div></td><td>SHA hashing is cheap on MPP (&lt;1µs/row)</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Join depth (raw)</td><td>1–2 joins</td><td>4–8 joins</td><td>1–2 joins</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:90%;background:#f97316"></div></div><span class="cx-bval" style="color:#f97316">4–8×</span></div></td><td>Info mart views; analysts never write raw SQL</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Query runtime</td><td>1×</td><td>3–6× (raw)</td><td>~1–1.3×</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:22%;background:#34d399"></div></div><span class="cx-bval" style="color:#34d399">~1× (mart)</span></div></td><td>PIT rebuild is the key operational investment</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Time-travel</td><td>O(log n) SCD2</td><td>O(1) with PIT</td><td>O(1)</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:15%;background:#34d399"></div></div><span class="cx-bval" style="color:#34d399">DV wins</span></div></td><td>DV advantage increases with history depth</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Schema change</td><td>High (ALTER TABLE)</td><td>Low (new table)</td><td>Low</td><td><div class="cx-bar-wrap"><div class="cx-bar-bg"><div class="cx-bar-fill" style="width:12%;background:#34d399"></div></div><span class="cx-bval" style="color:#34d399">DV wins</span></div></td><td>New satellite = zero downtime, no existing table touched</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note"><strong>Reading this honestly:</strong> Data Vault carries a real structural tax — roughly <strong>3–5× tables, 2–3× load compute, 2–4× ETL steps</strong> compared to an equivalent star schema. This overhead is concentrated in the load layer and raw vault query layer. The info mart + PIT architecture is specifically designed to recover that cost at query time.<br><br>The break-even point is typically around <strong>15–25 source entities</strong>. Below that, a well-designed star schema is simpler. Above it — especially with multiple source systems, regulatory audit requirements, or frequent schema changes — Data Vault's structural properties increasingly justify the overhead.</div>
+
+</div>
+
+<!-- ═══════════════ TAB: WHEN TO USE ═══════════════ -->
+<div class="tab-section" id="tab-decision">
+
+  <div class="dc-intro">
+    <div>
+      <div class="dc-intro-head">What this tab helps you decide</div>
+      <div class="dc-intro-body">Data Vault is not the right choice for every project. Use the interactive scorecard below to assess your situation across 8 dimensions — team size, source count, audit requirements, and more — and get a tailored recommendation.</div>
+    </div>
+    <div>
+      <div class="dc-intro-head">How the scoring works</div>
+      <div class="dc-intro-body">Each answer tilts the score toward Data Vault, Star Schema, or "either works". The final recommendation appears once you've answered all 8 questions. No answer = not counted.</div>
+    </div>
+  </div>
+
+  <div class="slabel">Interactive scorecard — answer all 8 questions</div>
+  <div class="dc-scorecard">
+    <div class="dc-sc-head">
+      <span class="dc-sc-title">Your project profile</span>
+      <button class="dc-sc-reset" onclick="resetScorecard()">↺ Reset</button>
+      <span id="dc-answered" style="font-size:10px;color:var(--muted);margin-left:8px">0 / 8 answered</span>
+    </div>
+    <div id="dc-questions"></div>
+  </div>
+
+  <div class="dc-result" id="dc-result"></div>
+
+  <div class="slabel">Use-case library — canonical scenarios</div>
+  <div class="dc-usecases" id="dc-usecases"></div>
+
+  <div class="slabel">Decision matrix — dimension by dimension</div>
+  <div class="dc-matrix">
+    <div class="dc-matrix-head">When each approach wins — use this as a quick reference during design reviews</div>
+    <table class="dc-tbl">
+      <thead><tr><th>Dimension</th><th>Data Vault wins when…</th><th>Star Schema wins when…</th><th>Either works when…</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text);font-weight:500">Source systems</td><td class="win-dv">3+ heterogeneous sources with conflicting keys</td><td class="win-star">1–2 clean, stable sources</td><td class="win-eq">2–3 well-governed sources</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">History depth</td><td class="win-dv">Full audit trail required; regulatory lookback > 3 years</td><td class="win-star">Current state + 1–2 year SCD2 history</td><td class="win-eq">Standard 3-year retention</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Schema stability</td><td class="win-dv">Frequent new relationships, fast-changing domains</td><td class="win-star">Stable, well-understood domain</td><td class="win-eq">Moderate change expected</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Team size</td><td class="win-dv">4+ data engineers; dedicated modelling competency</td><td class="win-star">1–2 engineers; speed to delivery is priority</td><td class="win-eq">3 engineers with SQL expertise</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Load pattern</td><td class="win-dv">Real-time / CDC streaming; near-real-time ingestion</td><td class="win-star">Daily/weekly batch loads</td><td class="win-eq">Mix of batch + intraday</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Query consumers</td><td class="win-dv">Multiple teams with different query patterns; self-service</td><td class="win-star">Single BI tool; fixed dashboard queries</td><td class="win-eq">BI tool + occasional ad-hoc</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Compliance</td><td class="win-dv">SOX, GDPR, HIPAA or other regulatory audit requirement</td><td class="win-star">No formal audit requirement</td><td class="win-eq">Internal governance only</td></tr>
+        <tr><td style="color:var(--text);font-weight:500">Time to first value</td><td class="win-dv">Long-term platform investment; 6+ month horizon</td><td class="win-star">Quick dashboard in < 4 weeks</td><td class="win-eq">2–3 month build cycle</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note"><strong>The honest take:</strong> Data Vault is a platform investment, not a shortcut. It pays back through flexibility, auditability, and parallelism — but only if your project lives long enough and scales wide enough to recoup the upfront complexity. If you're building a dashboard for one team from one source and you'll know what questions they'll ask, a star schema will ship faster and be easier to maintain. Data Vault earns its keep when the alternative is a spaghetti of point-to-point integrations, monthly ALTER TABLE emergencies, or an audit failure.</div>
+
+</div>
+
+</div><!-- /container -->
+<script>
+// ══════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════
+function switchTab(id,btn){
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  if(id==='er') renderERDiagrams();
+  if(id==='complexity') initComplexityCharts();
+}
+
+// ══════════════════════════════════════
+// SCHEMA ENTITY FILTER
+// ══════════════════════════════════════
+const entMap={hub:['hub-customer','hub-order','hub-product'],link:['link-co','link-op'],sat:['sat-cust','sat-contact','sat-ord'],pit:['pit'],reft:['ref']};
+function filterEnt(type,btn){
+  document.querySelectorAll('.flt-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.entity').forEach(e=>{e.style.opacity='0.15';e.style.filter='grayscale(0.9)';});
+  (entMap[type]||[]).forEach(id=>{const el=document.getElementById('e-'+id);if(el){el.style.opacity='1';el.style.filter='none';}});
+}
+function showAllEnt(btn){
+  document.querySelectorAll('.flt-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.entity').forEach(e=>{e.style.opacity='1';e.style.filter='none';});
+}
+
+// ══════════════════════════════════════
+// ENTITY DETAIL POPUP
+// ══════════════════════════════════════
+const entDetails={
+  'hub-customer':{type:'Hub',color:'var(--hub)',bg:'var(--hub-dim)',icon:'H',name:'HUB_CUSTOMER',desc:'Anchors the Customer business concept. Stores only the business key plus load metadata. Immutable — never updated.',rules:['Insert-only; rows never updated or deleted','Hash key = MD5(CUSTOMER_ID)','LOAD_DTS = first arrival of this BK','Multiple sources can contribute to same hub']},
+  'hub-order':{type:'Hub',color:'var(--hub)',bg:'var(--hub-dim)',icon:'H',name:'HUB_ORDER',desc:'Anchors the Order concept. One row per unique ORDER_NUMBER across all source systems.',rules:['One row per unique ORDER_NUMBER','All relationships go through Link tables','Duplicate BKs from multiple loads deduplicated']},
+  'hub-product':{type:'Hub',color:'var(--hub)',bg:'var(--hub-dim)',icon:'H',name:'HUB_PRODUCT',desc:'Anchors the Product concept. Stores the product SKU as its business key.',rules:['One row per unique PRODUCT_SKU','Linked to orders via LNK_ORD_PRODUCT','Satellites hang descriptive attrs off this anchor']},
+  'link-co':{type:'Link',color:'var(--link)',bg:'var(--link-dim)',icon:'L',name:'LNK_CUST_ORDER',desc:'Records the Customer→Order relationship as first-class data. New relationships never require altering existing tables.',rules:['References Hub HKs only — never raw BKs','PK = MD5(CUSTOMER_HK+ORDER_HK)','Can have own satellites','Supports N-ary relationships natively']},
+  'link-op':{type:'Link',color:'var(--link)',bg:'var(--link-dim)',icon:'L',name:'LNK_ORD_PRODUCT',desc:'Records which products appear on which orders. Added without touching any existing table — demonstrating non-destructive schema extension.',rules:['PK = MD5(ORDER_HK+PRODUCT_HK)','Quantity/price would go in a SAT on this link','Each order-product pair = one row']},
+  'sat-cust':{type:'Satellite',color:'var(--sat)',bg:'var(--sat-dim)',icon:'S',name:'SAT_CUST_DETAILS',desc:'Stores customer name/email with full history. Every change = new row; nothing overwritten. HASH_DIFF prevents duplicate inserts.',rules:['Composite PK: (CUSTOMER_HK + LOAD_DTS)','HASH_DIFF = MD5 of all attrs','LOAD_END_DTS optional for end-dating','One satellite per logical group or source']},
+  'sat-contact':{type:'Satellite',color:'var(--sat)',bg:'var(--sat-dim)',icon:'S',name:'SAT_CUST_CONTACT',desc:'Phone and country live separately because they come from a different source and change on a different cadence.',rules:['Separate satellite = independent change tracking','Phone changes never create SAT_CUST_DETAILS rows','PIT bridges both for point-in-time joins']},
+  'sat-ord':{type:'Satellite',color:'var(--sat)',bg:'var(--sat-dim)',icon:'S',name:'SAT_ORDER_STATUS',desc:'Tracks order status and totals over time. Each transition (Pending→Shipped→Delivered) is a new row — full audit trail.',rules:['HASH_DIFF prevents re-loading unchanged status','Each change has verifiable LOAD_DTS timestamp','REC_SRC identifies which system reported it']},
+  'pit':{type:'PIT',color:'var(--pit)',bg:'var(--pit-dim)',icon:'P',name:'PIT_CUSTOMER',desc:'Pre-computes satellite join keys per daily snapshot. Turns correlated subqueries into simple equi-joins.',rules:['One row per CUSTOMER_HK × SNAPSHOT_DTS','NULL LDTS = no data at that snapshot','Rebuilt (truncate+reload) on schedule','Dramatically simplifies downstream SQL']},
+  'reft':{type:'Reference',color:'var(--ref)',bg:'var(--ref-dim)',icon:'R',name:'REF_COUNTRY',desc:'Static lookup data outside the HLS structure. Country codes, currencies, status enumerations.',rules:['Natural key — no hash needed','Versioned with LOAD_DTS if values change','Shared across the entire vault']}
+};
+function selectEnt(id){
+  const d=entDetails[id];if(!d)return;
+  document.querySelectorAll('.entity').forEach(e=>e.classList.remove('selected'));
+  const el=document.getElementById('e-'+id)||document.getElementById('e-'+id.replace('reft','ref'));
+  if(el)el.classList.add('selected');
+  const panel=document.getElementById('detailPanel');
+  panel.innerHTML=`<div class="dp-header"><div class="dp-icon" style="background:${d.bg};color:${d.color}">${d.icon}</div><div><div class="dp-title" style="color:${d.color}">${d.name}</div><div style="font-size:9.5px;color:var(--muted);margin-top:2px;letter-spacing:0.1em">${d.type} Table</div></div><span class="dp-badge" style="color:${d.color};border-color:${d.color}40">${d.type.toUpperCase()}</span><button class="close-btn" onclick="closePanel()">✕ close</button></div><div class="dp-body"><div class="dp-sec"><h3>What it does</h3><p class="dp-desc">${d.desc}</p></div><div class="dp-sec"><h3>Modeling rules</h3><ul class="rule-list" style="--ec-li:${d.color}">${d.rules.map(r=>`<li>${r}</li>`).join('')}</ul></div></div>`;
+  panel.classList.add('visible');
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closePanel(){
+  document.getElementById('detailPanel').classList.remove('visible');
+  document.querySelectorAll('.entity').forEach(e=>e.classList.remove('selected'));
+}
+
+// ══════════════════════════════════════
+// SQL BLOCK SWITCHING
+// ══════════════════════════════════════
+function showSqlBlock(ns,id,btn){
+  const tabSet=document.getElementById(ns+'SqlTabs')||document.getElementById(ns==='pit'?'pitSqlTabs':'bizSqlTabs');
+  if(tabSet) tabSet.querySelectorAll('.sqtab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll(`[id^="${ns}-sql-"]`).forEach(b=>b.classList.remove('active'));
+  document.getElementById(`${ns}-sql-${id}`).classList.add('active');
+}
+
+// ══════════════════════════════════════
+// ER VIEW SWITCH
+// ══════════════════════════════════════
+function switchERView(view,btn){
+  document.getElementById('erPerspTabs').querySelectorAll('.sqtab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('er-raw').classList.remove('active');
+  document.getElementById('er-biz').classList.remove('active');
+  document.getElementById('er-'+view).classList.add('active');
+}
+
+// ══════════════════════════════════════
+// ER DIAGRAM RENDERING
+// ══════════════════════════════════════
+let erRendered=false;
+let crossLayerOn=false;
+
+function toggleCrossLayer(){
+  crossLayerOn=!crossLayerOn;
+  const btn=document.getElementById('crossToggle');
+  btn.classList.toggle('on',crossLayerOn);
+  renderBizER();
+}
+
+function renderERDiagrams(){
+  if(erRendered)return;
+  erRendered=true;
+  renderRawER();
+  renderBizER();
+}
+
+// SVG helpers
+function svgEl(tag,attrs){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
+  return el;
+}
+function cssVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+
+// Draw a node card
+function drawNode(svg,x,y,w,h,label,type,color,fields){
+  const g=svgEl('g',{class:'sv-node','data-id':label,'transform':`translate(${x},${y})`});
+  // shadow
+  const sh=svgEl('rect',{x:3,y:3,width:w,height:h,rx:7,fill:'#00000060'});
+  // bg
+  const bg=svgEl('rect',{class:'sv-bg',x:0,y:0,width:w,height:h,rx:7,fill:'#111827',stroke:color,'stroke-width':1.5,'stroke-opacity':0.5});
+  // header bar
+  const hbar=svgEl('rect',{x:0,y:0,width:w,height:28,rx:7,fill:color,'fill-opacity':0.12});
+  const hbar2=svgEl('rect',{x:0,y:14,width:w,height:14,fill:color,'fill-opacity':0.12}); // square bottom of header
+  // type pill
+  const pill=svgEl('rect',{x:w-44,y:7,width:38,height:14,rx:4,fill:color,'fill-opacity':0.15});
+  const pillTxt=svgEl('text',{x:w-25,y:18,'text-anchor':'middle',fill:color,'font-size':7.5,'letter-spacing':0.8,'font-family':'DM Mono, monospace'});
+  pillTxt.textContent=type.toUpperCase();
+  // label
+  const lbl=svgEl('text',{x:10,y:19,fill:color,'font-size':10,'font-weight':500,'font-family':'DM Mono, monospace'});
+  lbl.textContent=label.length>20?label.substring(0,19)+'…':label;
+  g.appendChild(sh); g.appendChild(bg); g.appendChild(hbar); g.appendChild(hbar2);
+  g.appendChild(pill); g.appendChild(pillTxt); g.appendChild(lbl);
+  // fields
+  fields.forEach((f,i)=>{
+    const fy=38+i*17;
+    if(f.key){
+      const kr=svgEl('rect',{x:8,y:fy-10,width:13,height:12,rx:2,fill:f.key==='PK'?cssVar('--hub'):f.key==='FK'?cssVar('--link'):f.key==='BK'?cssVar('--sat'):'#1e2d40'});
+      const kt=svgEl('text',{x:14.5,y:fy,fill:f.key==='PK'?'#000':f.key==='BK'?'#000':'#fff','font-size':6.5,'font-weight':'bold','text-anchor':'middle','font-family':'DM Mono, monospace'});
+      kt.textContent=f.key;
+      g.appendChild(kr); g.appendChild(kt);
+    }
+    const ft=svgEl('text',{x:26,y:fy,fill:'#e8eaf0','font-size':8.5,'font-family':'DM Mono, monospace'});
+    ft.textContent=f.name;
+    const dt=svgEl('text',{x:w-6,y:fy,'text-anchor':'end',fill:'#6b7a99','font-size':7.5,'font-family':'DM Mono, monospace'});
+    dt.textContent=f.type||'';
+    const sep=svgEl('line',{x1:6,y1:fy+4,x2:w-6,y2:fy+4,stroke:'#ffffff08','stroke-width':1});
+    g.appendChild(sep); g.appendChild(ft); g.appendChild(dt);
+  });
+  return g;
+}
+
+// Draw a curved edge
+function drawEdge(svg,x1,y1,x2,y2,color,dashed,label){
+  const mx=(x1+x2)/2, my=(y1+y2)/2;
+  const dx=x2-x1, dy=y2-y1;
+  const cx=mx-dy*0.25, cy=my+dx*0.25;
+  const path=svgEl('path',{
+    d:`M${x1},${y1} Q${cx},${cy} ${x2},${y2}`,
+    fill:'none',stroke:color,'stroke-width':1.5,'stroke-opacity':0.55,
+    'stroke-dasharray':dashed?'5,4':'none'
+  });
+  svg.insertBefore(path,svg.firstChild);
+  // arrowhead
+  const ang=Math.atan2(y2-cy,x2-cx);
+  const al=8,aw=4;
+  const ax1=x2-al*Math.cos(ang)+aw*Math.sin(ang), ay1=y2-al*Math.sin(ang)-aw*Math.cos(ang);
+  const ax2=x2-al*Math.cos(ang)-aw*Math.sin(ang), ay2=y2-al*Math.sin(ang)+aw*Math.cos(ang);
+  const arr=svgEl('polygon',{points:`${x2},${y2} ${ax1},${ay1} ${ax2},${ay2}`,fill:color,'fill-opacity':0.55});
+  svg.insertBefore(arr,svg.firstChild);
+  if(label){
+    const lt=svgEl('text',{x:cx,y:cy-5,'text-anchor':'middle',fill:color,'font-size':8,'font-family':'DM Mono, monospace','fill-opacity':0.8});
+    lt.textContent=label;
+    svg.appendChild(lt);
+  }
+}
+
+// ─── RAW VAULT ER ───
+function renderRawER(){
+  const svg=document.getElementById('rawErSvg');
+  svg.innerHTML='';
+  const W=1060,H=540;
+  const HUB=cssVar('--hub'),SAT=cssVar('--sat'),LNK=cssVar('--link'),PIT=cssVar('--pit'),REF=cssVar('--ref');
+  const NW=160, NH_base=28;
+  const fh=17; // field height
+
+  // Node definitions: [id, x, y, label, type, color, fields]
+  const nodes=[
+    {id:'HC',x:60,y:60,label:'HUB_CUSTOMER',type:'Hub',color:HUB,fields:[{key:'PK',name:'CUSTOMER_HK',type:'HASH'},{key:'BK',name:'CUSTOMER_ID',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'},{key:'',name:'REC_SRC',type:'VARCHAR'}]},
+    {id:'HO',x:440,y:60,label:'HUB_ORDER',type:'Hub',color:HUB,fields:[{key:'PK',name:'ORDER_HK',type:'HASH'},{key:'BK',name:'ORDER_NUMBER',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'},{key:'',name:'REC_SRC',type:'VARCHAR'}]},
+    {id:'HP',x:820,y:60,label:'HUB_PRODUCT',type:'Hub',color:HUB,fields:[{key:'PK',name:'PRODUCT_HK',type:'HASH'},{key:'BK',name:'PRODUCT_SKU',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'},{key:'',name:'REC_SRC',type:'VARCHAR'}]},
+    {id:'LCO',x:250,y:200,label:'LNK_CUST_ORDER',type:'Link',color:LNK,fields:[{key:'PK',name:'CUST_ORD_HK',type:'HASH'},{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'FK',name:'ORDER_HK',type:'HASH'},{key:'',name:'LOAD_DTS',type:'TS'},{key:'',name:'REC_SRC',type:'VARCHAR'}]},
+    {id:'LOP',x:630,y:200,label:'LNK_ORD_PRODUCT',type:'Link',color:LNK,fields:[{key:'PK',name:'ORD_PROD_HK',type:'HASH'},{key:'FK',name:'ORDER_HK',type:'HASH'},{key:'FK',name:'PRODUCT_HK',type:'HASH'},{key:'',name:'LOAD_DTS',type:'TS'},{key:'',name:'REC_SRC',type:'VARCHAR'}]},
+    {id:'SCD',x:20,y:350,label:'SAT_CUST_DETAILS',type:'Sat',color:SAT,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'PK',name:'LOAD_DTS',type:'TS'},{key:'',name:'FULL_NAME',type:'VARCHAR'},{key:'',name:'EMAIL',type:'VARCHAR'},{key:'',name:'HASH_DIFF',type:'HASH'}]},
+    {id:'SCC',x:200,y:350,label:'SAT_CUST_CONTACT',type:'Sat',color:SAT,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'PK',name:'LOAD_DTS',type:'TS'},{key:'',name:'PHONE',type:'VARCHAR'},{key:'',name:'COUNTRY_CODE',type:'CHAR'},{key:'',name:'HASH_DIFF',type:'HASH'}]},
+    {id:'SOS',x:400,y:350,label:'SAT_ORDER_STATUS',type:'Sat',color:SAT,fields:[{key:'FK',name:'ORDER_HK',type:'HASH'},{key:'PK',name:'LOAD_DTS',type:'TS'},{key:'',name:'STATUS',type:'VARCHAR'},{key:'',name:'TOTAL_AMT',type:'DEC'},{key:'',name:'HASH_DIFF',type:'HASH'}]},
+    {id:'PIT',x:600,y:380,label:'PIT_CUSTOMER',type:'PIT',color:PIT,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'PK',name:'SNAPSHOT_DTS',type:'TS'},{key:'',name:'SAT_DETAILS_LDTS',type:'TS'},{key:'',name:'SAT_CONTACT_LDTS',type:'TS'}]},
+    {id:'REF',x:860,y:350,label:'REF_COUNTRY',type:'Ref',color:REF,fields:[{key:'PK',name:'COUNTRY_CODE',type:'CHAR'},{key:'',name:'COUNTRY_NAME',type:'VARCHAR'},{key:'',name:'REGION',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'}]},
+  ];
+
+  // Edges: [fromId, toId, color, dashed, label]
+  const edges=[
+    ['LCO','HC',LNK,false,'FK'],['LCO','HO',LNK,false,'FK'],
+    ['LOP','HO',LNK,false,'FK'],['LOP','HP',LNK,false,'FK'],
+    ['SCD','HC',SAT,false,'FK'],['SCC','HC',SAT,false,'FK'],
+    ['SOS','HO',SAT,false,'FK'],
+    ['PIT','HC',PIT,false,'FK'],
+    ['PIT','SCD',PIT,true,'LDTS'],['PIT','SCC',PIT,true,'LDTS'],
+    ['SCC','REF',REF,true,'ref'],
+  ];
+
+  const nodeMap={};
+  nodes.forEach(n=>{
+    const nh=NH_base+n.fields.length*fh+8;
+    const g=drawNode(svg,n.x,n.y,NW,nh,n.label,n.type,n.color,n.fields);
+    nodeMap[n.id]={x:n.x,y:n.y,w:NW,h:nh};
+    svg.appendChild(g);
+    // hover
+    g.addEventListener('mouseenter',e=>highlightNode(svg,n.id,edges,true,e));
+    g.addEventListener('mouseleave',e=>{unhighlightAll(svg);hidePopup('rawPopup');});
+    g.addEventListener('mousemove',e=>movePopup('rawPopup',e,n,n.type));
+  });
+
+  // draw edges first (behind nodes)
+  edges.forEach(([from,to,color,dashed,lbl])=>{
+    const f=nodeMap[from],t=nodeMap[to];
+    if(!f||!t)return;
+    // connect midpoints
+    const x1=f.x+NW/2, y1=f.y+f.h/2;
+    const x2=t.x+NW/2, y2=t.y+t.h/2;
+    drawEdge(svg,x1,y1,x2,y2,color,dashed,'');
+  });
+}
+
+// ─── BIZ VAULT ER ───
+function renderBizER(){
+  const svg=document.getElementById('bizErSvg');
+  svg.innerHTML='';
+  const HUB=cssVar('--hub'),SAT=cssVar('--sat'),BIZ=cssVar('--biz'),SAL=cssVar('--sal'),PIT=cssVar('--pit'),CROSS=cssVar('--cross');
+  const NW=165,fh=17,NH_base=28;
+
+  // Raw vault nodes (greyed background, shown as context)
+  const rawNodes=[
+    {id:'HC',x:40,y:40,label:'HUB_CUSTOMER',type:'Hub',color:HUB,fields:[{key:'PK',name:'CUSTOMER_HK',type:'HASH'},{key:'BK',name:'CUSTOMER_ID',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'}]},
+    {id:'HO',x:430,y:40,label:'HUB_ORDER',type:'Hub',color:HUB,fields:[{key:'PK',name:'ORDER_HK',type:'HASH'},{key:'BK',name:'ORDER_NUMBER',type:'VARCHAR'},{key:'',name:'LOAD_DTS',type:'TS'}]},
+    {id:'SOS',x:430,y:200,label:'SAT_ORDER_STATUS',type:'Sat',color:SAT,fields:[{key:'FK',name:'ORDER_HK',type:'HASH'},{key:'PK',name:'LOAD_DTS',type:'TS'},{key:'',name:'STATUS/TOTAL',type:'…'}]},
+    {id:'PIT',x:250,y:200,label:'PIT_CUSTOMER',type:'PIT',color:PIT,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'PK',name:'SNAPSHOT_DTS',type:'TS'},{key:'',name:'SAT_*_LDTS',type:'TS'}]},
+  ];
+
+  // Biz vault nodes
+  const bizNodes=[
+    {id:'BSAT',x:40,y:360,label:'BSAT_CUST_SEGMENT',type:'bSAT',color:BIZ,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'PK',name:'LOAD_DTS',type:'TS'},{key:'',name:'SEGMENT',type:'VARCHAR'},{key:'',name:'LIFETIME_VALUE',type:'DEC'},{key:'',name:'RULE_VERSION',type:'VARCHAR'}]},
+    {id:'SAL',x:680,y:360,label:'SAL_CUSTOMER',type:'SAL',color:SAL,fields:[{key:'PK',name:'SAL_HK',type:'HASH'},{key:'FK',name:'CUSTOMER_HK_1',type:'HASH'},{key:'FK',name:'CUSTOMER_HK_2',type:'HASH'},{key:'',name:'CONFIDENCE',type:'DEC'},{key:'',name:'LOAD_DTS',type:'TS'}]},
+    {id:'BRDG',x:360,y:450,label:'BRDG_CUST_ORD_PROD',type:'Bridge',color:BIZ,fields:[{key:'FK',name:'CUSTOMER_HK',type:'HASH'},{key:'FK',name:'ORDER_HK',type:'HASH'},{key:'FK',name:'PRODUCT_HK',type:'HASH'},{key:'',name:'SNAPSHOT_DTS',type:'TS'}]},
+    {id:'HC2',x:840,y:360,label:'HUB_CUSTOMER (ERP)',type:'Hub',color:HUB,fields:[{key:'PK',name:'CUSTOMER_HK',type:'HASH'},{key:'BK',name:'ERP_CUST_ID',type:'VARCHAR'},{key:'',name:'REC_SRC',type:'ERP'}]},
+  ];
+
+  const nodeMap={};
+  const allNodes=[...rawNodes,...bizNodes];
+
+  // draw raw nodes with lower opacity
+  rawNodes.forEach(n=>{
+    const nh=NH_base+n.fields.length*fh+8;
+    const g=drawNode(svg,n.x,n.y,NW,nh,n.label,n.type,n.color,n.fields);
+    g.style.opacity='0.55';
+    nodeMap[n.id]={x:n.x,y:n.y,w:NW,h:nh};
+    svg.appendChild(g);
+  });
+
+  // draw biz nodes
+  bizNodes.forEach(n=>{
+    const nh=NH_base+n.fields.length*fh+8;
+    const g=drawNode(svg,n.x,n.y,NW,nh,n.label,n.type,n.color,n.fields);
+    nodeMap[n.id]={x:n.x,y:n.y,w:NW,h:nh};
+    svg.appendChild(g);
+    g.addEventListener('mouseenter',e=>movePopup('bizPopup',e,n,n.type));
+    g.addEventListener('mouseleave',()=>hidePopup('bizPopup'));
+    g.addEventListener('mousemove',e=>movePopup('bizPopup',e,n,n.type));
+  });
+
+  // Biz-internal edges
+  const bizEdges=[
+    ['SAL','HC',SAL,false,'resolves'],
+    ['SAL','HC2',SAL,false,'resolves'],
+    ['BRDG','HC',BIZ,false,'FK'],
+    ['BRDG','HO',BIZ,false,'FK'],
+  ];
+  bizEdges.forEach(([from,to,color,dashed,lbl])=>{
+    const f=nodeMap[from],t=nodeMap[to];if(!f||!t)return;
+    drawEdge(svg,f.x+NW/2,f.y+f.h/2,t.x+NW/2,t.y+t.h/2,color,dashed,lbl);
+  });
+
+  // Cross-layer edges (conditional)
+  if(crossLayerOn){
+    const crossEdges=[
+      ['BSAT','HC',CROSS,true,'reads HK'],
+      ['BSAT','SOS',CROSS,true,'reads attrs'],
+      ['BSAT','PIT',CROSS,true,'uses PIT'],
+      ['BRDG','PIT',CROSS,true,'uses PIT'],
+    ];
+    crossEdges.forEach(([from,to,color,dashed,lbl])=>{
+      const f=nodeMap[from],t=nodeMap[to];if(!f||!t)return;
+      drawEdge(svg,f.x+NW/2,f.y+f.h/2,t.x+NW/2,t.y+t.h/2,color,dashed,lbl);
+    });
+    // add label band
+    const band=svgEl('rect',{x:0,y:0,width:1060,height:290,fill:CROSS,'fill-opacity':0.025,rx:0});
+    svg.insertBefore(band,svg.firstChild);
+    const bandLbl=svgEl('text',{x:8,y:14,fill:CROSS,'font-size':9,'font-family':'DM Mono, monospace','fill-opacity':0.6,'letter-spacing':2});
+    bandLbl.textContent='RAW VAULT LAYER';
+    svg.appendChild(bandLbl);
+    const bandLbl2=svgEl('text',{x:8,y:348,fill:BIZ,'font-size':9,'font-family':'DM Mono, monospace','fill-opacity':0.6,'letter-spacing':2});
+    bandLbl2.textContent='BUSINESS VAULT LAYER';
+    svg.appendChild(bandLbl2);
+  }
+}
+
+// ─── Popup helpers ───
+const nodeDescriptions={
+  'HUB_CUSTOMER':'Identity anchor for all customers. Business key: CUSTOMER_ID. Never stores descriptive attrs.',
+  'HUB_ORDER':'Identity anchor for orders. All order context lives in satellites off this hub.',
+  'HUB_PRODUCT':'Identity anchor for products. Links orders to product SKUs.',
+  'LNK_CUST_ORDER':'Relationship: Customer placed Order. First-class data — adding Product relationship never touches this table.',
+  'LNK_ORD_PRODUCT':'Relationship: Order contains Product. Added without schema changes to any existing table.',
+  'SAT_CUST_DETAILS':'Customer name and email with full history. New row on every change.',
+  'SAT_CUST_CONTACT':'Customer phone and country. Separate satellite = separate change cadence.',
+  'SAT_ORDER_STATUS':'Order status and total amount. Audit trail of every status transition.',
+  'PIT_CUSTOMER':'Pre-computes effective satellite LOAD_DTS per daily snapshot. Enables simple equi-joins.',
+  'REF_COUNTRY':'Country code lookup table. Natural key, no hash required.',
+  'BSAT_CUST_SEGMENT':'Derived customer tier (BRONZE/SILVER/GOLD/PLATINUM) from order history. Business rule v1.2.',
+  'SAL_CUSTOMER':'Same-As Link: CRM customer C001 = ERP customer ERP-8847. Identity resolution.',
+  'BRDG_CUST_ORD_PROD':'Bridge table: pre-flattens Customer→Order→Product for fast mart queries.',
+  'HUB_CUSTOMER (ERP)':'Same hub entity from ERP source. SAL resolves it to the CRM hub key.',
+};
+function movePopup(popupId,e,node,type){
+  const popup=document.getElementById(popupId);
+  const wrap=popup.parentElement;
+  const rect=wrap.getBoundingClientRect();
+  const desc=nodeDescriptions[node.label]||'';
+  popup.innerHTML=`<div class="ep-title">${node.label}</div><div class="ep-type" style="color:${node.color}">${type}</div><div class="ep-desc">${desc}</div>`;
+  let lx=e.clientX-rect.left+14, ly=e.clientY-rect.top+14;
+  if(lx+250>wrap.offsetWidth)lx=e.clientX-rect.left-260;
+  popup.style.left=lx+'px'; popup.style.top=ly+'px';
+  popup.classList.add('show');
+}
+function hidePopup(id){document.getElementById(id).classList.remove('show');}
+function highlightNode(svg,id,edges,on,e){}
+function unhighlightAll(svg){}
+
+// ══════════════════════════════════════
+// PIPELINE STEPS
+// ══════════════════════════════════════
+const pipelineData=[
+  {
+    num:'0', color:'var(--muted)', title:'Source → Staging',
+    sub:'Land raw data exactly as delivered. No transformation, no filtering.',
+    tags:[{label:'INSERT',color:'var(--muted)'},{label:'RAW',color:'var(--muted)'}],
+    desc:'The staging area is your ingest buffer. Data arrives here from source systems (CSV, API, CDC, etc.) and is stored verbatim. This is your audit baseline — if anything goes wrong downstream, you can always replay from staging.',
+    checklist:['One staging table per source feed','No data type coercion or business logic','Preserve NULL values from source','Add LOAD_DTS and REC_SRC metadata columns','Truncate-and-reload or append depending on volume'],
+    warnings:['Never use staging as a query layer for end users','Do not join staging tables to vault tables directly','Staging data may contain duplicates — dedup happens in hub loads'],
+    code:`<span class="cm">-- Staging table: raw CRM feed</span>
+<span class="kw">CREATE TABLE</span> STG_CRM_CUSTOMERS (
+  CUSTOMER_ID   VARCHAR(<span class="nm">50</span>),
+  ORDER_NUMBER  VARCHAR(<span class="nm">50</span>),
+  FULL_NAME     VARCHAR(<span class="nm">200</span>),
+  EMAIL         VARCHAR(<span class="nm">200</span>),
+  PHONE         VARCHAR(<span class="nm">50</span>),
+  COUNTRY_CODE  CHAR(<span class="nm">2</span>),
+  STATUS        VARCHAR(<span class="nm">50</span>),
+  TOTAL_AMT     DECIMAL(<span class="nm">18</span>,<span class="nm">2</span>),
+  LOAD_DTS      TIMESTAMP <span class="kw">DEFAULT</span> <span class="fn">CURRENT_TIMESTAMP</span>,
+  REC_SRC       VARCHAR(<span class="nm">50</span>) <span class="kw">DEFAULT</span> <span class="st">'CRM'</span>
+);
+<span class="cm">-- Load from file or API (example: Snowflake COPY)</span>
+<span class="kw">COPY INTO</span> STG_CRM_CUSTOMERS
+<span class="kw">FROM</span> @crm_stage/customers_<span class="fn">CURRENT_DATE</span>.csv
+FILE_FORMAT = (TYPE=<span class="st">'CSV'</span> FIELD_OPTIONALLY_ENCLOSED_BY=<span class="st">'"'</span>)
+ON_ERROR = <span class="st">'CONTINUE'</span>; <span class="cm">-- log bad rows, don't abort</span>`
+  },
+  {
+    num:'1', color:'var(--hub)', title:'Staging → Hubs',
+    sub:'Extract unique business keys and anchor them. Insert-only, deduplication enforced.',
+    tags:[{label:'INSERT',color:'var(--hub)'},{label:'DEDUP',color:'var(--hub)'}],
+    desc:'Hubs are the identity layer. Extract every unique business key from staging and insert only keys that have not been seen before. The hash key (HK) is computed from the business key using MD5 or SHA-256. The hub captures the very first time a key appeared in the warehouse.',
+    checklist:['Hash the business key: CUSTOMER_HK = MD5(CUSTOMER_ID)','Insert-only — no UPDATE or DELETE ever','LOAD_DTS = timestamp of this batch, not source timestamp','REC_SRC = source system identifier string','Use NOT EXISTS or MERGE to skip existing keys'],
+    warnings:['Pad/trim business keys before hashing to ensure consistency','Use the same hashing algorithm (MD5 or SHA-256) everywhere','Business keys must be strings before hashing — cast numerics'],
+    code:`<span class="cm">-- Load HUB_CUSTOMER</span>
+<span class="kw">INSERT INTO</span> HUB_CUSTOMER (CUSTOMER_HK, CUSTOMER_ID, LOAD_DTS, REC_SRC)
+<span class="kw">SELECT DISTINCT</span>
+  <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(CUSTOMER_ID))) <span class="kw">AS</span> CUSTOMER_HK,
+  <span class="fn">UPPER</span>(<span class="fn">TRIM</span>(CUSTOMER_ID))        <span class="kw">AS</span> CUSTOMER_ID,
+  <span class="fn">CURRENT_TIMESTAMP</span>              <span class="kw">AS</span> LOAD_DTS,
+  <span class="st">'CRM'</span>                          <span class="kw">AS</span> REC_SRC
+<span class="kw">FROM</span> STG_CRM_CUSTOMERS stg
+<span class="kw">WHERE NOT EXISTS</span> (
+  <span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> HUB_CUSTOMER h
+   <span class="kw">WHERE</span> h.CUSTOMER_HK = <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(stg.CUSTOMER_ID)))
+);
+
+<span class="cm">-- Load HUB_ORDER (same pattern)</span>
+<span class="kw">INSERT INTO</span> HUB_ORDER (ORDER_HK, ORDER_NUMBER, LOAD_DTS, REC_SRC)
+<span class="kw">SELECT DISTINCT</span>
+  <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(ORDER_NUMBER))), <span class="fn">UPPER</span>(<span class="fn">TRIM</span>(ORDER_NUMBER)),
+  <span class="fn">CURRENT_TIMESTAMP</span>, <span class="st">'CRM'</span>
+<span class="kw">FROM</span> STG_CRM_CUSTOMERS stg
+<span class="kw">WHERE NOT EXISTS</span> (
+  <span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> HUB_ORDER h
+   <span class="kw">WHERE</span> h.ORDER_HK = <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(stg.ORDER_NUMBER)))
+);`
+  },
+  {
+    num:'2', color:'var(--link)', title:'Staging → Links',
+    sub:'Capture relationships between hubs. Must run after hubs are loaded.',
+    tags:[{label:'INSERT',color:'var(--link)'},{label:'AFTER HUBS',color:'var(--link)'}],
+    desc:'Links record relationships as first-class data. The link hash key is derived from the combination of all referenced hub hash keys. This is the only hard dependency in the loading order — links cannot be loaded before their referenced hubs exist.',
+    checklist:['Hash key = MD5(concat of all referenced HKs in fixed order)','Always reference Hub HKs, never raw business keys','Insert-only — relationships are never deleted','Can have their own satellite(s) for relationship context','Handle multi-source relationships: same link, different REC_SRC'],
+    warnings:['Use a consistent concat separator (e.g. "||") to avoid hash collisions','Link to hub FK references must use the same hash function as the hub','If a hub row is missing, the link insert will fail — ensure hub loads complete first'],
+    code:`<span class="cm">-- Load LNK_CUST_ORDER</span>
+<span class="kw">INSERT INTO</span> LNK_CUST_ORDER (CUST_ORD_HK, CUSTOMER_HK, ORDER_HK, LOAD_DTS, REC_SRC)
+<span class="kw">SELECT DISTINCT</span>
+  <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(
+    <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(CUSTOMER_ID))), <span class="st">'||'</span>,
+    <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(ORDER_NUMBER)))
+  ))                                  <span class="kw">AS</span> CUST_ORD_HK,
+  <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(CUSTOMER_ID)))    <span class="kw">AS</span> CUSTOMER_HK,
+  <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(ORDER_NUMBER)))   <span class="kw">AS</span> ORDER_HK,
+  <span class="fn">CURRENT_TIMESTAMP</span>                 <span class="kw">AS</span> LOAD_DTS,
+  <span class="st">'CRM'</span>                             <span class="kw">AS</span> REC_SRC
+<span class="kw">FROM</span> STG_CRM_CUSTOMERS stg
+<span class="kw">WHERE NOT EXISTS</span> (
+  <span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> LNK_CUST_ORDER l
+   <span class="kw">WHERE</span> l.CUST_ORD_HK = <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(
+     <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(stg.CUSTOMER_ID))),<span class="st">'||'</span>,
+     <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(stg.ORDER_NUMBER)))
+   ))
+);`
+  },
+  {
+    num:'3', color:'var(--sat)', title:'Staging → Satellites',
+    sub:'Load descriptive attributes. HASH_DIFF detects changes; insert-only.',
+    tags:[{label:'INSERT',color:'var(--sat)'},{label:'HASH_DIFF',color:'var(--sat)'}],
+    desc:'Satellites store all descriptive context. A new row is inserted only when the data has actually changed, detected via HASH_DIFF — a hash of all attribute columns. This prevents duplicate rows when unchanged data is re-delivered. Full history is preserved by design: nothing is ever updated or deleted.',
+    checklist:['HASH_DIFF = MD5(concat of all attribute columns, with separator)','Insert only when HASH_DIFF differs from latest existing row','LOAD_DTS is the warehouse arrival time, not source system time','LOAD_END_DTS (optional) = LOAD_DTS of next version; NULL = current','One satellite per source system or logical attribute group'],
+    warnings:['Include all attribute columns in HASH_DIFF — missing a column causes ghost duplicates','Use a consistent NULL placeholder in concat (e.g. "~") to handle NULLs correctly','Do not include LOAD_DTS itself in HASH_DIFF — it changes every batch'],
+    code:`<span class="cm">-- Load SAT_CUST_DETAILS</span>
+<span class="kw">INSERT INTO</span> SAT_CUST_DETAILS
+  (CUSTOMER_HK, LOAD_DTS, FULL_NAME, EMAIL, HASH_DIFF, REC_SRC)
+<span class="kw">SELECT</span>
+  <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(CUSTOMER_ID)))    <span class="kw">AS</span> CUSTOMER_HK,
+  <span class="fn">CURRENT_TIMESTAMP</span>                 <span class="kw">AS</span> LOAD_DTS,
+  FULL_NAME, EMAIL,
+  <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(
+    <span class="fn">COALESCE</span>(FULL_NAME,<span class="st">'~'</span>), <span class="st">'||'</span>,
+    <span class="fn">COALESCE</span>(EMAIL,<span class="st">'~'</span>)
+  ))                                <span class="kw">AS</span> HASH_DIFF,
+  <span class="st">'CRM'</span>                             <span class="kw">AS</span> REC_SRC
+<span class="kw">FROM</span> STG_CRM_CUSTOMERS stg
+<span class="kw">WHERE NOT EXISTS</span> (
+  <span class="cm">-- Skip if identical data already in sat (HASH_DIFF match)</span>
+  <span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> SAT_CUST_DETAILS s
+   <span class="kw">WHERE</span> s.CUSTOMER_HK = <span class="fn">MD5</span>(<span class="fn">UPPER</span>(<span class="fn">TRIM</span>(stg.CUSTOMER_ID)))
+     <span class="kw">AND</span> s.HASH_DIFF = <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(
+           <span class="fn">COALESCE</span>(stg.FULL_NAME,<span class="st">'~'</span>),<span class="st">'||'</span>,
+           <span class="fn">COALESCE</span>(stg.EMAIL,<span class="st">'~'</span>)))
+);`
+  },
+  {
+    num:'4', color:'var(--pit)', title:'Rebuild PIT Tables',
+    sub:'Truncate and reload per hub. Pre-computes satellite join keys at each snapshot.',
+    tags:[{label:'TRUNCATE+RELOAD',color:'var(--pit)'},{label:'SCHEDULED',color:'var(--pit)'}],
+    desc:'PIT tables are not raw vault — they are query acceleration structures. They are fully rebuilt on a schedule (typically daily). Each row maps a hub key × snapshot date to the effective LOAD_DTS of each satellite at that moment. This turns multi-satellite point-in-time joins into simple equi-joins.',
+    checklist:['Truncate + full reload on schedule (daily is standard)','Use a DATE_SPINE or calendar table for snapshot dates','Each satellite gets one LDTS column: SAT_<NAME>_LDTS','NULL in a LDTS column = no satellite data existed at that snapshot','Include all satellites for the hub, even rarely-changing ones'],
+    warnings:['PIT rebuild can be expensive on large history — consider incremental rebuild by snapshot date range','Never query PIT tables during rebuild — consider renaming strategy or zero-downtime rebuild','PIT does NOT replace raw satellite data — it only pre-computes join pointers'],
+    code:`<span class="cm">-- Rebuild PIT_CUSTOMER</span>
+<span class="kw">TRUNCATE TABLE</span> PIT_CUSTOMER;
+
+<span class="kw">INSERT INTO</span> PIT_CUSTOMER
+  (CUSTOMER_HK, SNAPSHOT_DTS, SAT_DETAILS_LDTS, SAT_CONTACT_LDTS)
+<span class="kw">WITH</span>
+spine <span class="kw">AS</span> (
+  <span class="cm">-- Generate one row per customer per day</span>
+  <span class="kw">SELECT</span> h.CUSTOMER_HK, d.snap_date::TIMESTAMP <span class="kw">AS</span> SNAPSHOT_DTS
+  <span class="kw">FROM</span> HUB_CUSTOMER h
+  <span class="kw">CROSS JOIN</span> (
+    <span class="kw">SELECT</span> DATEADD(day, seq, <span class="st">'2024-01-01'</span>)::DATE <span class="kw">AS</span> snap_date
+    <span class="kw">FROM</span> (<span class="kw">SELECT</span> ROW_NUMBER() <span class="kw">OVER</span>(<span class="kw">ORDER BY</span> <span class="nm">1</span>)-<span class="nm">1</span> <span class="kw">AS</span> seq
+          <span class="kw">FROM</span> TABLE(GENERATOR(rowcount=><span class="nm">1000</span>))) gen
+    <span class="kw">WHERE</span> snap_date &lt;= <span class="fn">CURRENT_DATE</span>
+  ) d
+)
+<span class="kw">SELECT</span>
+  s.CUSTOMER_HK,
+  s.SNAPSHOT_DTS,
+  <span class="fn">MAX</span>(d.LOAD_DTS) <span class="kw">FILTER</span>(<span class="kw">WHERE</span> d.LOAD_DTS &lt;= s.SNAPSHOT_DTS) <span class="kw">AS</span> SAT_DETAILS_LDTS,
+  <span class="fn">MAX</span>(c.LOAD_DTS) <span class="kw">FILTER</span>(<span class="kw">WHERE</span> c.LOAD_DTS &lt;= s.SNAPSHOT_DTS) <span class="kw">AS</span> SAT_CONTACT_LDTS
+<span class="kw">FROM</span>      spine s
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS  d <span class="kw">ON</span> d.CUSTOMER_HK = s.CUSTOMER_HK
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT  c <span class="kw">ON</span> c.CUSTOMER_HK = s.CUSTOMER_HK
+<span class="kw">GROUP BY</span>  s.CUSTOMER_HK, s.SNAPSHOT_DTS;`
+  },
+  {
+    num:'5', color:'var(--biz)', title:'Raw Vault → Business Vault',
+    sub:'Apply business rules. Populate bSATs with derived values and SALs for identity.',
+    tags:[{label:'DERIVE',color:'var(--biz)'},{label:'RULES',color:'var(--biz)'}],
+    desc:'Business Vault runs after raw vault is fully loaded. It reads from raw satellites and links to compute derived attributes — customer segments, risk scores, unified identities. Business rules are versioned (RULE_VERSION column) so you can audit which logic produced each value over time.',
+    checklist:['Always read from raw vault — never from staging','Include RULE_VERSION column to track business logic changes','Use HASH_DIFF to avoid re-inserting unchanged derived values','bSATs are insert-only just like raw satellites','SALs link hub keys from different sources representing same entity'],
+    warnings:['A business rule change should NOT update old rows — insert new rows with new RULE_VERSION','Never hard-code thresholds directly into a view — they belong in a bSAT with versioning','Business vault runs AFTER PIT rebuild to ensure current satellite data is available'],
+    code:`<span class="cm">-- BSAT_CUST_SEGMENT: classify customers by lifetime order value</span>
+<span class="kw">INSERT INTO</span> BSAT_CUST_SEGMENT
+  (CUSTOMER_HK, LOAD_DTS, SEGMENT, LIFETIME_VALUE, HASH_DIFF, RULE_VERSION)
+<span class="kw">WITH</span> ltv <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> l.CUSTOMER_HK, <span class="fn">SUM</span>(s.TOTAL_AMT) <span class="kw">AS</span> LTV
+  <span class="kw">FROM</span>  LNK_CUST_ORDER l
+  <span class="kw">JOIN</span>  SAT_ORDER_STATUS s <span class="kw">ON</span> s.ORDER_HK = l.ORDER_HK
+    <span class="cm">-- current status row only</span>
+    <span class="kw">AND</span> s.LOAD_DTS = (<span class="kw">SELECT MAX</span>(x.LOAD_DTS) <span class="kw">FROM</span> SAT_ORDER_STATUS x
+                       <span class="kw">WHERE</span> x.ORDER_HK = l.ORDER_HK)
+  <span class="kw">GROUP BY</span> l.CUSTOMER_HK
+)
+<span class="kw">SELECT</span>
+  CUSTOMER_HK,
+  <span class="fn">CURRENT_TIMESTAMP</span> <span class="kw">AS</span> LOAD_DTS,
+  <span class="kw">CASE WHEN</span> LTV >= <span class="nm">10000</span> <span class="kw">THEN</span> <span class="st">'PLATINUM'</span>
+       <span class="kw">WHEN</span> LTV >= <span class="nm">1000</span>  <span class="kw">THEN</span> <span class="st">'GOLD'</span>
+       <span class="kw">WHEN</span> LTV >= <span class="nm">100</span>   <span class="kw">THEN</span> <span class="st">'SILVER'</span>
+       <span class="kw">ELSE</span>                    <span class="st">'BRONZE'</span> <span class="kw">END</span> <span class="kw">AS</span> SEGMENT,
+  LTV,
+  <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(CUSTOMER_HK, <span class="st">'||'</span>, LTV::VARCHAR)) <span class="kw">AS</span> HASH_DIFF,
+  <span class="st">'v1.2'</span> <span class="kw">AS</span> RULE_VERSION
+<span class="kw">FROM</span> ltv t
+<span class="kw">WHERE NOT EXISTS</span> (
+  <span class="kw">SELECT</span> <span class="nm">1</span> <span class="kw">FROM</span> BSAT_CUST_SEGMENT b
+   <span class="kw">WHERE</span> b.CUSTOMER_HK = t.CUSTOMER_HK
+     <span class="kw">AND</span> b.HASH_DIFF = <span class="fn">MD5</span>(<span class="fn">CONCAT</span>(t.CUSTOMER_HK,<span class="st">'||'</span>,t.LTV::VARCHAR))
+);`
+  },
+  {
+    num:'6', color:'var(--ok)', title:'Business Vault → Information Mart',
+    sub:'Build dimensional views (DIM_, FACT_) on top of Business Vault for BI tools.',
+    tags:[{label:'VIEW',color:'var(--ok)'},{label:'BI LAYER',color:'var(--ok)'}],
+    desc:'The Information Mart is the delivery layer — dimensional (star schema) views built from the Business Vault and raw vault via PIT. Analysts and BI tools interact only with this layer. They never write raw vault SQL. Views are typically CREATE OR REPLACE — they have no storage cost and always reflect the latest vault data.',
+    checklist:['Create DIM_ views per business entity (DIM_CUSTOMER, DIM_PRODUCT, etc.)','Create FACT_ views per business process (FACT_ORDERS, FACT_TRANSACTIONS)','Join via PIT for point-in-time accuracy','Include bSAT derived attrs alongside raw sat attrs in same view','Document the business definitions of each column in the view'],
+    warnings:['Avoid putting business logic into mart views — it belongs in bSATs','If mart queries are slow, first ensure PIT is rebuilt and indexes exist on HK columns','Mart views should be read-only — never insert/update through a mart view'],
+    code:`<span class="cm">-- DIM_CUSTOMER: full customer dimension for BI</span>
+<span class="kw">CREATE OR REPLACE VIEW</span> DIM_CUSTOMER <span class="kw">AS</span>
+<span class="kw">WITH</span> latest_pit <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> CUSTOMER_HK,
+         <span class="fn">MAX</span>(SNAPSHOT_DTS) <span class="kw">AS</span> SNAPSHOT_DTS
+  <span class="kw">FROM</span>   PIT_CUSTOMER
+  <span class="kw">GROUP BY</span> CUSTOMER_HK
+)
+<span class="kw">SELECT</span>
+  h.CUSTOMER_ID,
+  d.FULL_NAME,
+  d.EMAIL,
+  c.PHONE,
+  r.COUNTRY_NAME,
+  r.REGION,
+  seg.SEGMENT           <span class="kw">AS</span> CUSTOMER_SEGMENT,
+  seg.LIFETIME_VALUE,
+  seg.RULE_VERSION      <span class="kw">AS</span> SEGMENT_RULE_VERSION,
+  h.LOAD_DTS            <span class="kw">AS</span> FIRST_SEEN_DTS,
+  d.LOAD_DTS            <span class="kw">AS</span> DETAILS_LAST_UPDATED
+<span class="kw">FROM</span>      HUB_CUSTOMER     h
+<span class="kw">JOIN</span>      latest_pit        lp  <span class="kw">ON</span> lp.CUSTOMER_HK = h.CUSTOMER_HK
+<span class="kw">JOIN</span>      PIT_CUSTOMER      pit <span class="kw">ON</span> pit.CUSTOMER_HK = lp.CUSTOMER_HK
+                               <span class="kw">AND</span> pit.SNAPSHOT_DTS = lp.SNAPSHOT_DTS
+<span class="kw">LEFT JOIN</span> SAT_CUST_DETAILS  d   <span class="kw">ON</span> d.CUSTOMER_HK = pit.CUSTOMER_HK
+                               <span class="kw">AND</span> d.LOAD_DTS    = pit.SAT_DETAILS_LDTS
+<span class="kw">LEFT JOIN</span> SAT_CUST_CONTACT  c   <span class="kw">ON</span> c.CUSTOMER_HK = pit.CUSTOMER_HK
+                               <span class="kw">AND</span> c.LOAD_DTS    = pit.SAT_CONTACT_LDTS
+<span class="kw">LEFT JOIN</span> BSAT_CUST_SEGMENT seg <span class="kw">ON</span> seg.CUSTOMER_HK = h.CUSTOMER_HK
+                               <span class="kw">AND</span> seg.LOAD_DTS = (
+                                 <span class="kw">SELECT MAX</span>(s2.LOAD_DTS)
+                                 <span class="kw">FROM</span>   BSAT_CUST_SEGMENT s2
+                                 <span class="kw">WHERE</span>  s2.CUSTOMER_HK = h.CUSTOMER_HK)
+<span class="kw">LEFT JOIN</span> REF_COUNTRY        r   <span class="kw">ON</span> r.COUNTRY_CODE = c.COUNTRY_CODE;`
+  }
+];
+
+function buildPipeline(){
+  const container=document.getElementById('pipelineSteps');
+  pipelineData.forEach((step,i)=>{
+    const div=document.createElement('div');
+    div.className='pipe-step';
+    div.style.setProperty('--step-color',step.color);
+    div.innerHTML=`
+      <div class="pipe-header" onclick="togglePipeStep(this)">
+        <div class="pipe-num">${step.num}</div>
+        <div class="pipe-info">
+          <div class="pipe-title">${step.title}</div>
+          <div class="pipe-sub">${step.sub}</div>
+        </div>
+        <div class="pipe-tags">${step.tags.map(t=>`<span class="ptag" style="color:${t.color};border-color:${t.color}40;background:${t.color}12">${t.label}</span>`).join('')}</div>
+        <span class="pipe-arrow">▼</span>
+      </div>
+      <div class="pipe-body">
+        <div class="pipe-content">
+          <p class="pipe-desc">${step.desc}</p>
+          <div class="pipe-cols">
+            <div>
+              <div class="pipe-col-title">Implementation checklist</div>
+              <ul class="check-list">${step.checklist.map(c=>`<li>${c}</li>`).join('')}</ul>
+            </div>
+            <div>
+              <div class="pipe-col-title">Watch out for</div>
+              <ul class="check-list warn-list">${step.warnings.map(w=>`<li>${w}</li>`).join('')}</ul>
+            </div>
+          </div>
+          <div class="pipe-col-title" style="margin-bottom:8px">Sample SQL</div>
+          <pre class="code">${step.code}</pre>
+        </div>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+function togglePipeStep(header){
+  const step=header.parentElement;
+  step.classList.toggle('open');
+}
+
+// ══════════════════════════════════════
+// COMPLEXITY CHARTS
+// ══════════════════════════════════════
+let cxRendered=false;
+function initComplexityCharts(){
+  if(cxRendered)return; cxRendered=true;
+  Chart.defaults.color='#6b7a99';
+  Chart.defaults.borderColor='#1e2d40';
+  Chart.defaults.font.family="'DM Mono', monospace";
+  Chart.defaults.font.size=10;
+  const DV='#7c6af7',DV2='#a78bfa',DIM='#f0a500',MART='#00c9a7',WARN='#f97316',OK='#34d399';
+  function mkChart(id,type,labels,datasets,opts={}){
+    const ctx=document.getElementById(id);
+    if(!ctx)return;
+    return new Chart(ctx.getContext('2d'),{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'},plugins:{legend:{display:opts.legend??false,labels:{boxWidth:10,padding:12,font:{size:10}}},tooltip:{backgroundColor:'#0d111e',borderColor:'#1e2d40',borderWidth:1,titleColor:'#e8eaf0',bodyColor:'#6b7a99',padding:10,cornerRadius:6}},scales:opts.scales??{x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},beginAtZero:true}}}});
+  }
+  const scl=(ytitle)=>({x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},beginAtZero:true,title:{display:true,text:ytitle,color:'#6b7a99'}}});
+  // 1. Table count
+  {const e=[2,5,10,15,20,30,40,50];
+  mkChart('cTableCount','line',e.map(x=>x+' entities'),[
+    {label:'Data Vault',data:e.map(x=>x*5.2),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'Star Schema',data:e.map(x=>x*1.25+1),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'DV Info Mart',data:e.map(x=>x*1.3+1),borderColor:MART,fill:false,tension:0.4,pointRadius:3,borderWidth:1.5,borderDash:[4,3]}
+  ],{legend:true,scales:scl('Table count')});}
+  // 2. Row count
+  {const r=[1,5,10,20,50,100,200,500];
+  mkChart('cRowCount','line',r.map(x=>x+'M'),[
+    {label:'Data Vault',data:r.map(x=>x*2.4),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'Star SCD2',data:r.map(x=>x*1.55),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2}
+  ],{legend:true,scales:scl('Rows stored (M)')});}
+  // 3. ETL steps
+  {const e=[2,5,10,15,20,30,40,50];
+  mkChart('cEtlSteps','line',e.map(x=>x+' entities'),[
+    {label:'DV total jobs',data:e.map(x=>x*4.5),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'DV wall-clock',data:e.map(x=>x*1.5),borderColor:DV2,fill:false,tension:0.4,pointRadius:3,borderWidth:1.5,borderDash:[5,3]},
+    {label:'Star jobs',data:e.map(x=>x*1.2+1),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2}
+  ],{legend:true,scales:scl('Pipeline steps')});}
+  // 4. Load compute
+  {const r=[1,5,10,20,50,100,200,500];
+  mkChart('cLoadCompute','line',r.map(x=>x+'M'),[
+    {label:'Data Vault',data:r.map(x=>x*2.7),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'Star Schema',data:r.map(x=>x*1.0),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2}
+  ],{legend:true,scales:scl('Relative CPU·s (star=1)')});}
+  // 5. Join depth
+  {const s=[1,2,3,4,5,6,7,8];
+  mkChart('cJoinDepth','line',s.map(x=>x+' sat'),[
+    {label:'DV raw vault',data:s.map(x=>2+x*1.1),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.3,pointRadius:3,borderWidth:2},
+    {label:'DV info mart',data:s.map(()=>1.5),borderColor:MART,backgroundColor:MART+'10',fill:true,tension:0.3,pointRadius:3,borderWidth:1.5,borderDash:[4,3]},
+    {label:'Star schema',data:s.map(x=>1+x*0.3),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.3,pointRadius:3,borderWidth:2}
+  ],{legend:true,scales:{x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},title:{display:true,text:'Satellites per hub',color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},beginAtZero:true,title:{display:true,text:'Joins per query',color:'#6b7a99'}}}});}
+  // 6. Query runtime
+  {const s=[1,2,3,4,5,6,7,8];
+  mkChart('cQueryTime','line',s.map(x=>x+' sats'),[
+    {label:'DV without PIT',data:s.map(x=>1+Math.pow(x,1.6)*0.55),borderColor:WARN,backgroundColor:WARN+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'DV with PIT',data:s.map(x=>0.8+x*0.18),borderColor:DV,backgroundColor:DV+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'Star schema',data:s.map(x=>0.5+x*0.12),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2}
+  ],{legend:true,scales:{x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},title:{display:true,text:'Satellites per hub',color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},beginAtZero:true,title:{display:true,text:'Relative query time',color:'#6b7a99'}}}});}
+  // 7. Time travel
+  {const m=[1,3,6,12,24,36,48,60];
+  mkChart('cTimeTravelCost','line',m.map(x=>x+'mo'),[
+    {label:'DV with PIT',data:m.map(()=>1.0),borderColor:MART,backgroundColor:MART+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'Star SCD2',data:m.map(x=>0.6+Math.log(x+1)*0.55),borderColor:DIM,backgroundColor:DIM+'18',fill:true,tension:0.4,pointRadius:3,borderWidth:2},
+    {label:'DV no PIT',data:m.map(x=>0.8+Math.log(x+1)*0.9),borderColor:WARN,fill:false,tension:0.4,pointRadius:3,borderWidth:1.5,borderDash:[4,3]}
+  ],{legend:true,scales:{x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},title:{display:true,text:'History depth',color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},beginAtZero:true,title:{display:true,text:'Relative query cost',color:'#6b7a99'}}}});}
+  // 8. Overall
+  {const e=[2,5,8,10,15,20,25,30,40,50];
+  const dvS=e.map(x=>{if(x<=5)return 3.8-x*0.18;if(x<=15)return 3.0-(x-5)*0.09;if(x<=30)return 2.1-(x-15)*0.04;return 1.5-(x-30)*0.01;});
+  const mS=e.map(x=>{if(x<=10)return 2.2-x*0.07;if(x<=30)return 1.5-(x-10)*0.025;return 1.0;});
+  mkChart('cOverall','line',e.map(x=>x+' entities'),[
+    {label:'Data Vault (full)',data:dvS,borderColor:DV,backgroundColor:DV+'20',fill:true,tension:0.45,pointRadius:4,borderWidth:2.5},
+    {label:'DV + Info Mart',data:mS,borderColor:MART,backgroundColor:MART+'15',fill:true,tension:0.45,pointRadius:3,borderWidth:1.5,borderDash:[5,3]},
+    {label:'Star Schema',data:e.map(()=>1.0),borderColor:DIM,backgroundColor:DIM+'10',fill:true,tension:0,pointRadius:2,borderWidth:1.5,borderDash:[3,3]}
+  ],{legend:true,scales:{x:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},title:{display:true,text:'Domain entities',color:'#6b7a99'}},y:{grid:{color:'#1a2235'},ticks:{color:'#6b7a99'},title:{display:true,text:'Complexity score (star=1.0)',color:'#6b7a99'},beginAtZero:false,min:0.5}}});}
+}
+buildPipeline();
+// Pre-render ER so it's ready on first visit
+setTimeout(()=>renderERDiagrams(),100);
+
+// ══════════════════════════════════════
+// DECISION / WHEN TO USE TAB
+// ══════════════════════════════════════
+const dcQuestions=[
+  {id:'sources',label:'How many source systems feed this warehouse?',hint:'Count distinct operational systems: CRM, ERP, logistics, finance, etc.',opts:[{label:'1–2 sources',v:'star'},{label:'3–5 sources',v:'either'},{label:'6+ sources',v:'dv'}]},
+  {id:'history',label:'What history depth and auditability do you need?',hint:'Consider regulatory requirements, time-travel query needs, and data lineage.',opts:[{label:'Current state only',v:'star'},{label:'3–5 years SCD2',v:'either'},{label:'Full immutable audit trail',v:'dv'}]},
+  {id:'schema',label:'How stable is your source schema and business domain?',hint:'How often do new relationships, entities, or source fields appear?',opts:[{label:'Very stable (rare changes)',v:'star'},{label:'Moderate (quarterly changes)',v:'either'},{label:'Frequent / unpredictable',v:'dv'}]},
+  {id:'team',label:'What is your data engineering team size and DV experience?',hint:'Data Vault requires upfront investment in tooling and modelling discipline.',opts:[{label:'1–2 engineers, no DV exp',v:'star'},{label:'3–4 engineers, some SQL',v:'either'},{label:'4+ engineers, DV knowledge',v:'dv'}]},
+  {id:'load',label:'What is your primary data load pattern?',hint:'DV shines with high-frequency, multi-source ingestion patterns.',opts:[{label:'Daily / weekly batch',v:'star'},{label:'Intraday batch (hourly)',v:'either'},{label:'Real-time / CDC streaming',v:'dv'}]},
+  {id:'compliance',label:'Do you have regulatory compliance or audit requirements?',hint:'SOX, GDPR, HIPAA, PCI-DSS all benefit from DV\'s immutable audit trail.',opts:[{label:'None',v:'star'},{label:'Internal governance only',v:'either'},{label:'SOX / GDPR / HIPAA / PCI',v:'dv'}]},
+  {id:'consumers',label:'Who consumes the data and how?',hint:'Consider the diversity of teams, tools, and query patterns downstream.',opts:[{label:'One team, fixed dashboards',v:'star'},{label:'2–3 teams, mixed use',v:'either'},{label:'Many teams, self-service',v:'dv'}]},
+  {id:'horizon',label:'What is your time-to-value expectation?',hint:'DV front-loads complexity. Star schema delivers faster early on.',opts:[{label:'Weeks (quick wins needed)',v:'star'},{label:'2–4 months',v:'either'},{label:'6+ months (platform build)',v:'dv'}]},
+];
+const ucData=[
+  {icon:'🏦',title:'Enterprise Data Warehouse',color:'var(--pit)',verdict:'dv',verdictLabel:'Data Vault',body:'10+ source systems, strict SOX audit trail, quarterly schema changes from M&A activity, 5-year lookback requirement. DV is the natural fit.'},
+  {icon:'📊',title:'Single-Domain Analytics',color:'var(--hub)',verdict:'star',verdictLabel:'Star Schema',body:'One CRM source, weekly batch load, stable schema, BI team wants dashboards in 3 weeks. Star schema ships faster and is easier to maintain.'},
+  {icon:'🛒',title:'E-commerce Platform',color:'var(--pit)',verdict:'dv',verdictLabel:'Data Vault',body:'Real-time order events, 4 source systems (OMS, CRM, WMS, finance), GDPR right-to-erasure tracking. DV handles identity resolution and audit.'},
+  {icon:'🏥',title:'Healthcare Data Platform',color:'var(--pit)',verdict:'dv',verdictLabel:'Data Vault',body:'HIPAA compliance, patient identity across 6+ systems (EHR, billing, labs), full history required. DV audit trail is architecturally necessary.'},
+  {icon:'🚀',title:'Startup MVP Warehouse',color:'var(--hub)',verdict:'star',verdictLabel:'Star Schema',body:'2 engineers, one product database, need reporting in 2 weeks. DV overhead is not justified. Build star schema now, migrate if you outgrow it.'},
+  {icon:'🏭',title:'Manufacturing Operations',color:'var(--sat)',verdict:'either',verdictLabel:'Either works',body:'IoT sensor feeds + ERP, moderate schema changes, no formal compliance. Either viable — DV if IoT volumes grow, star schema if budget is tight.'},
+  {icon:'💰',title:'Financial Risk Platform',color:'var(--pit)',verdict:'dv',verdictLabel:'Data Vault',body:'Multiple trading systems, BCBS 239 data lineage requirements, regulatory audit every quarter. DV record source tracking and hash keys are compliance enablers.'},
+  {icon:'📱',title:'Product Analytics',color:'var(--hub)',verdict:'star',verdictLabel:'Star Schema',body:'Event tracking from one app, daily loads, small team, stakeholders want Looker dashboards fast. Classic star schema with fact_events + dims is the right call.'},
+];
+let dcAnswers={};
+function buildDecision(){
+  const qc=document.getElementById('dc-questions');
+  if(!qc)return;
+  dcQuestions.forEach(q=>{
+    const row=document.createElement('div');
+    row.className='dc-question';
+    row.innerHTML=`<div><div class="dc-q-label">${q.label}</div><div class="dc-q-hint">${q.hint}</div></div><div class="dc-options">${q.opts.map(o=>`<button class="dc-opt" data-qid="${q.id}" data-val="${o.v}" onclick="pickOpt(this,'${q.id}','${o.v}')">${o.label}</button>`).join('')}</div>`;
+    qc.appendChild(row);
+  });
+  const uc=document.getElementById('dc-usecases');
+  ucData.forEach(u=>{
+    const vc=u.verdict==='dv'?'var(--pit)':u.verdict==='star'?'var(--hub)':'var(--sat)';
+    const vb=u.verdict==='dv'?'var(--pit-dim)':u.verdict==='star'?'var(--hub-dim)':'var(--sat-dim)';
+    const card=document.createElement('div');
+    card.className='dc-uc'; card.style.setProperty('--uc-color',u.color);
+    card.innerHTML=`<div class="dc-uc-icon">${u.icon}</div><div class="dc-uc-title">${u.title}</div><div class="dc-uc-body">${u.body}</div><span class="dc-uc-verdict" style="color:${vc};border-color:${vc}40;background:${vb}">${u.verdictLabel}</span>`;
+    uc.appendChild(card);
+  });
+}
+function pickOpt(btn,qid,val){
+  document.querySelectorAll(`[data-qid="${qid}"]`).forEach(b=>b.classList.remove('sel-dv','sel-star','sel-either'));
+  btn.classList.add(val==='dv'?'sel-dv':val==='star'?'sel-star':'sel-either');
+  dcAnswers[qid]=val;
+  document.getElementById('dc-answered').textContent=`${Object.keys(dcAnswers).length} / 8 answered`;
+  updateResult();
+}
+function updateResult(){
+  const vals=Object.values(dcAnswers);
+  if(vals.length<8){document.getElementById('dc-result').classList.remove('show');return;}
+  const dvS=vals.filter(v=>v==='dv').length, starS=vals.filter(v=>v==='star').length, eiS=vals.filter(v=>v==='either').length;
+  let rec,color,bg,border,pills,sub;
+  if(dvS>=6){rec='Data Vault 2.0';color='var(--pit)';bg='#7c6af710';border='var(--pit)';sub='Your project profile strongly favours Data Vault. Multiple source systems, compliance requirements, frequent schema changes, and a long delivery horizon all compound to make DV\'s upfront investment worthwhile. Prioritise PIT tables and an info mart layer from day one.';pills=['Multiple sources','Audit trail required','Complex domain','Long horizon'];}
+  else if(starS>=6){rec='Star Schema';color='var(--hub)';bg='#f0a50010';border='var(--hub)';sub='Your project profile favours a classic star schema. Single source, stable domain, small team, and fast delivery expectations mean DV overhead would slow you down without paying back. Build a clean star schema — you can always migrate if requirements grow.';pills=['Single source','No audit requirement','Stable domain','Fast delivery'];}
+  else if(dvS>=4){rec='Data Vault — phased approach';color='var(--pit)';bg='#7c6af710';border='var(--pit)';sub='DV is the better long-term choice but you have constraints that will make the initial build challenging. Start with a clean staging + info mart layer, then introduce raw vault tables gradually. Invest in datavault4dbt early to reduce boilerplate.';pills=['DV long-term','Phased rollout','Invest in tooling','Info mart first'];}
+  else if(starS>=4){rec='Star Schema — evolve later';color='var(--hub)';bg='#f0a50010';border='var(--hub)';sub='Star schema is the right call now, but a few signals suggest you may outgrow it. Design with clean business keys and good SCD2 discipline — that makes a future DV migration much less painful.';pills=['Star now','Clean BK design','SCD2 discipline','Migration path open'];}
+  else{rec='Either works — use team expertise to decide';color='var(--sat)';bg='#00c9a710';border='var(--sat)';sub='Your profile is balanced with no strong signal either way. If your team has DV knowledge, go DV. If not, a well-designed star schema with good SCD2 discipline will serve you well.';pills=['Balanced profile','Team expertise decides','DV if experienced','Star if speed matters'];}
+  const el=document.getElementById('dc-result');
+  el.style.borderColor=border;el.style.background=bg;
+  el.innerHTML=`<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:${color};margin-bottom:6px">Recommendation</div><div class="dc-result-title" style="color:${color}">${rec}</div><div class="dc-result-sub">${sub}</div><div class="dc-result-pills">${pills.map(p=>`<span class="dc-rpill" style="color:${color};border-color:${color}40;background:${bg}">${p}</span>`).join('')}</div><div style="margin-top:14px;font-size:10px;color:var(--muted)">Score: ${dvS}/8 DV · ${starS}/8 Star · ${eiS}/8 neutral</div>`;
+  el.classList.add('show');
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function resetScorecard(){
+  dcAnswers={};
+  document.querySelectorAll('.dc-opt').forEach(b=>b.classList.remove('sel-dv','sel-star','sel-either'));
+  document.getElementById('dc-answered').textContent='0 / 8 answered';
+  document.getElementById('dc-result').classList.remove('show');
+}
+buildDecision();
+</script>
+</body>
+</html>
