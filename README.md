@@ -1,3 +1,5 @@
+![main](/screenshots/dv_main.png)
+
 # 🔎 Data Vault Explorer
 
 **Data Vault Explorer** is an interactive, single-file web application designed to help you **understand and explore a Data Vault model visually**.
@@ -5,9 +7,7 @@ It combines schema visualization, relationship exploration, and model insights i
 
 No build tools. No backend. Just open the file and explore.
 
-```
-/screenshots/dv_main.png
-```
+
 
 
 ---
@@ -90,12 +90,10 @@ This tool is useful for:
 
 # 📸 Preview
 
-```
-/screenshots/dv_er.png
-/screenshots/dv_complexity.png
-/screenshots/dv_loading_pipeline.png
-/screenshots/dv_decision_making.png
-```
+![er](/screenshots/dv_er.png)
+![complexity](/screenshots/dv_complexity.png)
+![loading_pipeline](/screenshots/dv_loading_pipeline.png)
+![decision_making](/screenshots/dv_decision_making.png)
 
 ---
 
